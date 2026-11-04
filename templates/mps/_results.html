@@ -1,0 +1,27 @@
+{% load ui %}
+{% if page.paginator.count %}
+<p class="mb-3 text-sm text-slate-500">Wyników: {{ page.paginator.count }}</p>
+<ul class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+  {% for mp in page %}
+  <li>
+    <a href="{{ mp.get_absolute_url }}" class="group flex h-full items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-slate-300 hover:shadow-md">
+      <img src="{{ mp.photo_mini_url }}" alt="" loading="lazy" class="h-14 w-14 shrink-0 rounded-full object-cover bg-slate-100 ring-2 ring-offset-2" style="--tw-ring-color: {{ mp.club.code|clubcolor }}">
+      <div class="min-w-0">
+        <p class="truncate font-semibold group-hover:text-red-700">{{ mp.full_name }}</p>
+        <p class="truncate text-xs text-slate-500">{{ mp.club.code|default:"bez klubu" }}{% if mp.district_name %} · okręg {{ mp.district_num }} ({{ mp.district_name }}){% endif %}</p>
+        <p class="mt-1 text-xs text-slate-500">
+          {% if mp.attendance_pct is not None %}Frekwencja <b class="text-slate-700">{{ mp.attendance_pct|pct:0 }}</b>{% endif %}
+          {% if not mp.active %}<span class="ml-1 rounded bg-slate-100 px-1.5 py-0.5 text-slate-600">były poseł</span>{% endif %}
+        </p>
+      </div>
+    </a>
+  </li>
+  {% endfor %}
+</ul>
+{% include "components/pagination.html" with target="#results" %}
+{% else %}
+<div class="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center">
+  <h3 class="font-semibold">Nie znaleziono posłów</h3>
+  <p class="mt-1 text-sm text-slate-500">Spróbuj innej frazy lub wyczyść filtry.</p>
+</div>
+{% endif %}

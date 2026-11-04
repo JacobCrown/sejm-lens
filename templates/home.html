@@ -1,0 +1,88 @@
+{% extends "base.html" %}{% load ui humanize %}
+{% block title %}Jak głosuje Sejm{% endblock %}
+{% block content %}
+<section class="relative overflow-hidden rounded-3xl bg-slate-900 px-6 py-10 sm:px-10 sm:py-14 text-white">
+  <div class="absolute inset-y-0 right-0 w-1/2 bg-gradient-to-l from-red-600/30 to-transparent pointer-events-none"></div>
+  <div class="relative max-w-2xl">
+    <p class="text-sm font-semibold uppercase tracking-wider text-red-300">{% if term %}{{ term.number }}. kadencja Sejmu RP{% else %}Sejm RP{% endif %}</p>
+    <h1 class="mt-3 text-3xl sm:text-5xl font-extrabold tracking-tight">Sprawdź, jak głosują Twoi posłowie</h1>
+    <p class="mt-4 text-slate-300 text-base sm:text-lg">Wyniki każdego głosowania z podziałem na kluby, profile posłów z frekwencją i lojalnością oraz ich oświadczenia majątkowe w czytelnej formie.</p>
+    <form action="{% url 'mp_list' %}" class="mt-6 flex max-w-md gap-2">
+      <label for="hero-q" class="sr-only">Szukaj posła</label>
+      <input id="hero-q" name="q" type="search" placeholder="Wpisz nazwisko posła..." class="min-w-0 flex-1 rounded-xl border-0 bg-white/10 px-4 py-2.5 text-white placeholder:text-slate-400 ring-1 ring-white/20 focus:ring-2 focus:ring-red-400">
+      <button class="rounded-xl bg-red-600 px-4 py-2.5 font-semibold hover:bg-red-500">Szukaj</button>
+    </form>
+  </div>
+  <dl class="relative mt-10 grid grid-cols-3 gap-4 max-w-lg">
+    <div><dt class="text-xs text-slate-400">Głosowań w bazie</dt><dd class="text-2xl font-bold">{{ counts.votings|intcomma }}</dd></div>
+    <div><dt class="text-xs text-slate-400">Posłów</dt><dd class="text-2xl font-bold">{{ counts.mps }}</dd></div>
+    <div><dt class="text-xs text-slate-400">Klubów i kół</dt><dd class="text-2xl font-bold">{{ counts.clubs }}</dd></div>
+  </dl>
+</section>
+
+{% if not recent %}
+<div class="mt-10">{% include "components/empty_sync.html" with title="Jeszcze nie ma głosowań" %}</div>
+{% else %}
+<div class="mt-10 grid gap-8 lg:grid-cols-3">
+  <section class="lg:col-span-2">
+    <div class="flex items-end justify-between">
+      <h2 class="text-xl font-bold">Ostatnie głosowania</h2>
+      <a href="{% url 'voting_list' %}" class="text-sm font-semibold text-red-600 hover:text-red-700">Wszystkie →</a>
+    </div>
+    <div class="mt-4 grid gap-4 sm:grid-cols-2">
+      {% for v in recent %}
+      <a href="{{ v.get_absolute_url }}" class="group flex flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-slate-300 hover:shadow-md">
+        <div class="flex items-center justify-between gap-2 text-xs text-slate-500">
+          <span>{{ v.date|date:"j E Y" }} · pos. {{ v.sitting.number }}, nr {{ v.number }}</span>
+          {% include "components/result_badge.html" with voting=v %}
+        </div>
+        <h3 class="mt-3 line-clamp-3 font-semibold leading-snug text-slate-900 group-hover:text-red-700">{{ v.display_title }}</h3>
+        {% if v.title != v.display_title %}<p class="mt-1 line-clamp-2 text-sm text-slate-500">{{ v.title }}</p>{% endif %}
+        <div class="mt-auto pt-4">
+          {% include "components/vote_bar.html" with yes=v.yes no=v.no abstain=v.abstain rest=v.not_participating total=460 %}
+          <div class="mt-2 flex gap-3 text-xs text-slate-600">
+            <span><b class="text-emerald-600">{{ v.yes }}</b> za</span>
+            <span><b class="text-red-600">{{ v.no }}</b> przeciw</span>
+            <span><b class="text-amber-600">{{ v.abstain }}</b> wstrz.</span>
+          </div>
+        </div>
+      </a>
+      {% endfor %}
+    </div>
+  </section>
+
+  <aside class="space-y-8">
+    <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <h2 class="font-bold">Najbardziej wyrównane głosowania</h2>
+      <p class="mt-1 text-sm text-slate-500">Najmniejsza różnica między głosami „za” i „przeciw”.</p>
+      <ul class="mt-4 divide-y divide-slate-100">
+        {% for v in divisive %}
+        <li class="py-3">
+          <a href="{{ v.get_absolute_url }}" class="block hover:text-red-700">
+            <p class="line-clamp-2 text-sm font-medium">{{ v.display_title }}</p>
+            <p class="mt-1 text-xs text-slate-500">{{ v.date|date:"j.m.Y" }} · <b class="text-emerald-600">{{ v.yes }}</b> : <b class="text-red-600">{{ v.no }}</b> (różnica {{ v.margin }})</p>
+          </a>
+        </li>
+        {% empty %}<li class="py-3 text-sm text-slate-500">Za mało danych.</li>
+        {% endfor %}
+      </ul>
+    </section>
+
+    <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <h2 class="font-bold">Spójność klubów</h2>
+      <p class="mt-1 text-sm text-slate-500">Jak zgodnie głosują członkowie klubu (100% = zawsze tak samo).</p>
+      <ul class="mt-4 space-y-3">
+        {% for row in cohesion %}
+        <li>
+          <a href="{% url 'club_detail' row.club.code %}" class="block group">
+            <div class="flex justify-between text-sm"><span class="font-medium group-hover:text-red-700">{{ row.club.code }}</span><span class="tabular-nums text-slate-600">{{ row.cohesion|ratio_pct }}</span></div>
+            <div class="mt-1 h-1.5 rounded-full bg-slate-100"><div class="h-1.5 rounded-full" style="width: {% widthratio row.cohesion 1 100 %}%; background: {{ row.club.code|clubcolor }}"></div></div>
+          </a>
+        </li>
+        {% endfor %}
+      </ul>
+    </section>
+  </aside>
+</div>
+{% endif %}
+{% endblock %}

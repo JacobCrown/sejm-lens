@@ -1,0 +1,275 @@
+{% extends "base.html" %}{% load ui humanize %}
+{% block title %}{{ mp.full_name }}{% endblock %}
+{% block content %}
+<nav class="text-sm text-slate-500" aria-label="Okruszki">
+  <a href="{% url 'mp_list' %}" class="hover:text-slate-700">Posłowie</a><span class="mx-1">/</span><span class="text-slate-700">{{ mp.full_name }}</span>
+</nav>
+
+<header class="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+  <div class="h-2" style="background: {{ mp.club.code|clubcolor }}"></div>
+  <div class="flex flex-col gap-6 p-5 sm:flex-row sm:p-7">
+    <img src="{{ mp.photo_url }}" alt="Zdjęcie: {{ mp.full_name }}" class="h-40 w-32 shrink-0 self-center rounded-xl object-cover bg-slate-100 sm:self-start">
+    <div class="min-w-0 flex-1">
+      <div class="flex flex-wrap items-center gap-2">
+        {% include "components/club_badge.html" with club=mp.club %}
+        {% if not mp.active %}<span class="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">Mandat wygasł{% if mp.mandate_expiry_date %} {{ mp.mandate_expiry_date|date:"j.m.Y" }}{% endif %}{% if mp.inactive_cause %} · {{ mp.inactive_cause|lower }}{% endif %}</span>{% endif %}
+      </div>
+      <h1 class="mt-2 text-2xl sm:text-4xl font-extrabold tracking-tight">{{ mp.first_name }} {% if mp.second_name %}{{ mp.second_name }} {% endif %}{{ mp.last_name }}</h1>
+      {% if mp.club %}<p class="mt-1 text-slate-600">{{ mp.club.name }}</p>{% endif %}
+      <dl class="mt-5 grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
+        {% if mp.district_name %}<div><dt class="text-slate-500">Okręg wyborczy</dt><dd class="font-medium">nr {{ mp.district_num }} · {{ mp.district_name }}{% if mp.voivodeship %} ({{ mp.voivodeship }}){% endif %}</dd></div>{% endif %}
+        {% if mp.election_votes %}<div><dt class="text-slate-500">Głosów w wyborach</dt><dd class="font-medium tabular-nums">{{ mp.election_votes|intcomma }}</dd></div>{% endif %}
+        {% if mp.profession %}<div><dt class="text-slate-500">Zawód</dt><dd class="font-medium">{{ mp.profession }}</dd></div>{% endif %}
+        {% if mp.education_level %}<div><dt class="text-slate-500">Wykształcenie</dt><dd class="font-medium">{{ mp.education_level }}</dd></div>{% endif %}
+        {% if mp.birth_date %}<div><dt class="text-slate-500">Urodzony(a)</dt><dd class="font-medium">{{ mp.birth_date|date:"j E Y" }}{% if mp.birth_location %}, {{ mp.birth_location }}{% endif %}</dd></div>{% endif %}
+        {% if mp.email %}<div><dt class="text-slate-500">Kontakt</dt><dd class="font-medium break-all"><a class="text-red-700 hover:underline" href="mailto:{{ mp.email }}">{{ mp.email }}</a></dd></div>{% endif %}
+      </dl>
+    </div>
+  </div>
+</header>
+
+<section class="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="Statystyki głosowań">
+  <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <p class="text-sm text-slate-500">Frekwencja</p>
+    <p class="mt-1 text-3xl font-extrabold tabular-nums">{{ mp.attendance_pct|pct:1 }}</p>
+    <p class="mt-1 text-xs text-slate-500">obecność w {{ mp.votings_present|intcomma }} z {{ mp.votings_total|intcomma }} głosowań</p>
+  </div>
+  <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <p class="text-sm text-slate-500">Zgodność z klubem</p>
+    <p class="mt-1 text-3xl font-extrabold tabular-nums">{{ mp.loyalty_pct|pct:1 }}</p>
+    <p class="mt-1 text-xs text-slate-500">{% if mp.loyalty_base %}tak jak większość klubu{% else %}nie dotyczy (bez klubu){% endif %}</p>
+  </div>
+  <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <p class="text-sm text-slate-500">Głosy wbrew klubowi</p>
+    <p class="mt-1 text-3xl font-extrabold tabular-nums">{{ against|intcomma }}</p>
+    <p class="mt-1 text-xs text-slate-500">gdy klub miał wyraźną większość</p>
+  </div>
+  <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <p class="text-sm text-slate-500">Rozkład głosów</p>
+    {% with y=choices.YES|default:0 n=choices.NO|default:0 a=choices.ABSTAIN|default:0 %}
+    <div class="mt-3">{% include "components/vote_bar.html" with yes=y no=n abstain=a rest=0 total=mp.votings_total %}</div>
+    <p class="mt-2 text-xs text-slate-600"><b class="text-emerald-600">{{ y }}</b> za · <b class="text-red-600">{{ n }}</b> przeciw · <b class="text-amber-600">{{ a }}</b> wstrz.</p>
+    {% endwith %}
+  </div>
+</section>
+
+{# ---------------- Majątek ---------------- #}
+<section id="majatek" class="mt-8 rounded-2xl border border-slate-200 bg-white p-5 sm:p-7 shadow-sm">
+  <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <div>
+      <h2 class="text-xl font-bold">Majątek z oświadczeń</h2>
+      <p class="mt-1 text-sm text-slate-500">Składniki majątku, dochody i zobowiązania odczytane z oświadczeń majątkowych i przeliczone na złote.</p>
+      {% if processing_cost %}
+      <p class="mt-1 text-xs text-slate-500" data-testid="processing-cost">
+        Koszt policzenia tych danych:
+        {% if processing_cost.total_usd is not None %}<strong class="font-semibold text-slate-700">{{ processing_cost.total_text }}</strong>
+        {% elif processing_cost.prompt_tokens %}<strong class="font-semibold text-slate-700">{{ processing_cost.prompt_tokens }} + {{ processing_cost.completion_tokens }} tokenów</strong> (dostawca nie podał kwoty)
+        {% else %}brak danych{% endif %}
+        {% if processing_cost.models %}· model: <span class="font-mono">{{ processing_cost.models|join:", " }}</span>{% endif %}
+        {% if processing_cost.total_usd is not None and processing_cost.unpriced %}· dla {{ processing_cost.unpriced }} z {{ processing_cost.declarations }} oświadczeń brak danych o koszcie{% endif %}
+        · OCR lokalnie, bez opłaty.
+      </p>
+      {% endif %}
+    </div>
+    <div class="flex flex-wrap gap-2">
+      {% if has_demo %}<span class="inline-flex items-center rounded-full bg-violet-50 px-2.5 py-1 text-xs font-semibold text-violet-700 ring-1 ring-inset ring-violet-600/20" title="Dane wygenerowane przez MockExtractor do prezentacji interfejsu">Dane demonstracyjne</span>{% endif %}
+      {% if needs_review %}<span class="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700 ring-1 ring-inset ring-amber-600/20" title="Niska pewność odczytu lub wykryte niespójności">Część danych wymaga weryfikacji</span>{% endif %}
+    </div>
+  </div>
+
+  {% if wealth %}
+  {% if insights %}
+  <ul class="mt-5 grid gap-2 md:grid-cols-2">
+    {% for i in insights %}
+    <li class="flex items-start gap-2 rounded-xl px-3 py-2.5 text-sm {% if i.tone == 'up' %}bg-emerald-50 text-emerald-900{% elif i.tone == 'down' %}bg-red-50 text-red-900{% else %}bg-slate-50 text-slate-800{% endif %}">
+      <span aria-hidden="true" class="mt-0.5">{% if i.tone == 'up' %}▲{% elif i.tone == 'down' %}▼{% else %}●{% endif %}</span>{{ i.text }}
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+
+  <div class="mt-6 flex flex-wrap items-center gap-2" role="tablist" aria-label="Rok oświadczenia">
+    {% for s in wealth %}
+    <button type="button" role="tab" data-year="{{ s.year }}" aria-selected="{% if forloop.last %}true{% else %}false{% endif %}"
+            class="year-tab rounded-xl px-4 py-1.5 text-sm font-semibold {% if forloop.last %}bg-slate-900 text-white{% else %}bg-slate-100 text-slate-600 hover:bg-slate-200{% endif %}">{{ s.year }}</button>
+    {% endfor %}
+  </div>
+
+  {% for s in wealth %}
+  <div class="year-panel mt-5 {% if not forloop.last %}hidden{% endif %}" data-year="{{ s.year }}" role="tabpanel">
+    <dl class="grid grid-cols-2 gap-3 lg:grid-cols-5">
+      <div class="col-span-2 rounded-xl bg-slate-900 p-4 text-white lg:col-span-1"><dt class="text-xs text-slate-300">Majątek netto</dt><dd class="mt-1 text-2xl font-extrabold">{{ s.net_worth|money }}</dd></div>
+      <div class="rounded-xl bg-sky-50 p-4"><dt class="text-xs text-sky-800">Oszczędności</dt><dd class="mt-1 text-xl font-bold text-sky-900">{{ s.savings|money }}</dd></div>
+      <div class="rounded-xl bg-amber-50 p-4"><dt class="text-xs text-amber-800">Nieruchomości</dt><dd class="mt-1 text-xl font-bold text-amber-900">{{ s.real_estate|money }}</dd></div>
+      <div class="rounded-xl bg-red-50 p-4"><dt class="text-xs text-red-800">Zobowiązania</dt><dd class="mt-1 text-xl font-bold text-red-900">{{ s.liabilities|money }}</dd></div>
+      <div class="rounded-xl bg-emerald-50 p-4"><dt class="text-xs text-emerald-800">Dochód w roku</dt><dd class="mt-1 text-xl font-bold text-emerald-900">{{ s.income|money }}</dd></div>
+    </dl>
+
+    <div class="mt-6 grid gap-6 lg:grid-cols-[18rem_1fr]">
+      <div>
+        <h3 class="text-sm font-semibold text-slate-700">Struktura majątku</h3>
+        <div class="donut mt-2 h-52 w-full" data-year="{{ s.year }}"></div>
+        <ul class="mt-2 space-y-1.5 text-sm">
+          {% for part in s.structure %}
+          <li class="flex items-center gap-2">
+            <span class="h-2.5 w-2.5 shrink-0 rounded-full" style="background: {{ part.color }}"></span>
+            <span class="flex-1 text-slate-700">{{ part.name }}</span>
+            <span class="tabular-nums text-slate-500">{{ part.pct|pct:0 }}</span>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+      <div class="space-y-5">
+        {% for g in s.groups %}
+        <div>
+          <div class="flex items-baseline justify-between border-b border-slate-100 pb-1">
+            <h3 class="text-sm font-semibold text-slate-700">{{ g.label }}</h3>
+            <span class="text-sm font-semibold tabular-nums {% if g.category == 'LIABILITY' %}text-red-700{% endif %}">{{ g.total|money }}</span>
+          </div>
+          <ul class="mt-2 space-y-1.5">
+            {% for entry in g.items %}
+            <li class="text-sm">
+              <p class="text-slate-900">{{ entry.text }}</p>
+              {% if entry.item.description or entry.item.ownership %}<p class="text-xs text-slate-500">{{ entry.item.description }}{% if entry.item.description and entry.item.ownership %} · {% endif %}{{ entry.item.ownership }}</p>{% endif %}
+            </li>
+            {% endfor %}
+          </ul>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    {% if s.extras %}
+    <div class="mt-6 grid gap-4 border-t border-slate-100 pt-5 md:grid-cols-2">
+      {% for ex in s.extras %}
+      <div>
+        <h3 class="text-sm font-semibold text-slate-700">{{ ex.title }}</h3>
+        <ul class="mt-1.5 space-y-1 text-sm text-slate-800">{% for line in ex.lines %}<li>{{ line }}</li>{% endfor %}</ul>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if s.issues %}
+    <details class="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+      <summary class="cursor-pointer font-semibold">Wykryte problemy z odczytem ({{ s.issues|length }})</summary>
+      <p class="mt-2 text-xs text-amber-800">Automatyczna weryfikacja porównała dane z tekstem skanu. Poniższe pozycje mogą być błędnie odczytane, sprawdź je w źródłowym PDF.</p>
+      <ul class="mt-2 list-disc space-y-1 pl-5">{% for issue in s.issues %}<li>{{ issue }}</li>{% endfor %}</ul>
+    </details>
+    {% endif %}
+
+    <p class="mt-6 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
+      <span>Oświadczenie: {{ s.declaration.get_kind_display|lower }}, stan za {{ s.year }} r.</span>
+      <span>· Analiza: {% if s.declaration.is_demo %}dane demonstracyjne (MockExtractor){% elif s.declaration.extractor == "ocr_llm" %}OCR ({{ s.declaration.ocr_engine }}) + model językowy{% else %}{{ s.declaration.extractor|default:"-" }}{% endif %}{% if s.declaration.confidence is not None %} (pewność {{ s.declaration.confidence|ratio_pct:0 }}){% endif %}</span>
+      {% with run=s.declaration.latest_successful_run %}{% if run and run.usage_summary %}<span>· Koszt modelu: {{ run.usage_summary }}. OCR liczony lokalnie, bez opłaty.</span>{% endif %}{% endwith %}
+      {% if s.declaration.pdf_url %}<a href="{{ s.declaration.pdf_url }}" target="_blank" rel="noopener" class="font-medium text-red-700 hover:underline">Źródłowy PDF ↗</a>{% endif %}
+    </p>
+  </div>
+  {% endfor %}
+
+  {% if wealth|length > 1 %}
+  <div class="mt-8 border-t border-slate-100 pt-6">
+    <h3 class="font-semibold">Zmiany w kolejnych latach</h3>
+    <p class="text-sm text-slate-500">Słupki pokazują składniki majątku (zobowiązania poniżej osi), linia - majątek netto.</p>
+    <div id="wealth-timeline" class="mt-3 h-72 w-full"></div>
+  </div>
+  {% endif %}
+
+  {% else %}
+  <div class="mt-6 rounded-xl border border-dashed border-slate-300 p-8 text-center">
+    {% if pending_declarations %}
+    <h3 class="font-semibold">Oświadczenia czekają na analizę</h3>
+    <p class="mt-1 text-sm text-slate-500">Zaimportowano {{ pending_declarations }} plik(i), ale nie zostały jeszcze przeanalizowane albo analiza się nie powiodła.</p>
+    <code class="mt-3 inline-block rounded-lg bg-slate-900 px-3 py-1.5 text-xs text-slate-100">python manage.py extract_declarations --mp {{ mp.sejm_id }}</code>
+    {% else %}
+    <h3 class="font-semibold">Brak przeanalizowanych oświadczeń</h3>
+    <p class="mt-1 text-sm text-slate-500">Zaimportuj PDF oświadczenia albo wygeneruj dane demonstracyjne.</p>
+    <code class="mt-3 inline-block rounded-lg bg-slate-900 px-3 py-1.5 text-xs text-slate-100">python manage.py sync_declarations --mp {{ mp.sejm_id }} --year 2024 --file oswiadczenie.pdf --extract</code>
+    {% endif %}
+  </div>
+  {% endif %}
+</section>
+
+{# ---------------- Głosowania ---------------- #}
+<section id="glosy" class="mt-8 rounded-2xl border border-slate-200 bg-white p-5 sm:p-7 shadow-sm">
+  <h2 class="text-xl font-bold">Historia głosowań</h2>
+  <div class="mt-4 flex flex-wrap gap-2 text-sm" role="group" aria-label="Filtr głosów">
+    <button type="button" class="vote-filter rounded-xl px-3 py-1.5 font-medium bg-slate-900 text-white" hx-get="{% url 'mp_votes' mp.sejm_id %}" hx-target="#mp-votes">Wszystkie</button>
+    <button type="button" class="vote-filter rounded-xl px-3 py-1.5 font-medium bg-slate-100 text-slate-600 hover:bg-slate-200" hx-get="{% url 'mp_votes' mp.sejm_id %}?filter=YES" hx-target="#mp-votes">Za</button>
+    <button type="button" class="vote-filter rounded-xl px-3 py-1.5 font-medium bg-slate-100 text-slate-600 hover:bg-slate-200" hx-get="{% url 'mp_votes' mp.sejm_id %}?filter=NO" hx-target="#mp-votes">Przeciw</button>
+    <button type="button" class="vote-filter rounded-xl px-3 py-1.5 font-medium bg-slate-100 text-slate-600 hover:bg-slate-200" hx-get="{% url 'mp_votes' mp.sejm_id %}?filter=ABSTAIN" hx-target="#mp-votes">Wstrzymał się</button>
+    <button type="button" class="vote-filter rounded-xl px-3 py-1.5 font-medium bg-slate-100 text-slate-600 hover:bg-slate-200" hx-get="{% url 'mp_votes' mp.sejm_id %}?filter=ABSENT" hx-target="#mp-votes">Nieobecny</button>
+    <button type="button" class="vote-filter rounded-xl px-3 py-1.5 font-medium bg-slate-100 text-slate-600 hover:bg-slate-200" hx-get="{% url 'mp_votes' mp.sejm_id %}?filter=against" hx-target="#mp-votes">Wbrew klubowi</button>
+  </div>
+  <div id="mp-votes" class="htmx-fade mt-4">
+    {% include "mps/_votes.html" %}
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+{{ structures|json_script:"wealth-structures" }}
+{{ wealth_chart|json_script:"wealth-chart" }}
+<script>
+(function () {
+  const pln = v => new Intl.NumberFormat('pl-PL', { style: 'currency', currency: 'PLN', maximumFractionDigits: 0 }).format(v);
+  const structures = JSON.parse(document.getElementById('wealth-structures').textContent);
+  const donuts = {};
+  function drawDonut(el) {
+    const year = el.dataset.year;
+    if (donuts[year]) { donuts[year].resize(); return; }
+    const data = (structures[year] || []).map(d => ({ name: d.name, value: d.value, itemStyle: { color: d.color } }));
+    const chart = echarts.init(el);
+    chart.setOption({
+      tooltip: { trigger: 'item', formatter: p => `${p.name}<br><b>${pln(p.value)}</b> (${p.percent}%)` },
+      series: [{ type: 'pie', radius: ['55%', '85%'], center: ['50%', '50%'], label: { show: false }, data }],
+    });
+    donuts[year] = chart;
+  }
+  const visibleDonut = () => document.querySelector('.year-panel:not(.hidden) .donut');
+  if (visibleDonut()) drawDonut(visibleDonut());
+
+  document.querySelectorAll('.year-tab').forEach(tab => tab.addEventListener('click', () => {
+    document.querySelectorAll('.year-tab').forEach(t => {
+      const on = t === tab;
+      t.setAttribute('aria-selected', on);
+      t.classList.toggle('bg-slate-900', on); t.classList.toggle('text-white', on);
+      t.classList.toggle('bg-slate-100', !on); t.classList.toggle('text-slate-600', !on);
+    });
+    document.querySelectorAll('.year-panel').forEach(p => p.classList.toggle('hidden', p.dataset.year !== tab.dataset.year));
+    drawDonut(visibleDonut());
+  }));
+
+  const tl = document.getElementById('wealth-timeline');
+  if (tl) {
+    const d = JSON.parse(document.getElementById('wealth-chart').textContent);
+    const chart = echarts.init(tl);
+    const bar = (name, data, color) => ({ name, type: 'bar', stack: 'w', data, itemStyle: { color }, barMaxWidth: 48 });
+    chart.setOption({
+      tooltip: { trigger: 'axis', valueFormatter: v => pln(Math.abs(v)) },
+      legend: { bottom: 0, textStyle: { fontSize: 11 } },
+      grid: { left: 8, right: 8, top: 16, bottom: 40, containLabel: true },
+      xAxis: { type: 'category', data: d.years },
+      yAxis: { type: 'value', axisLabel: { formatter: v => (v / 1e6).toLocaleString('pl-PL') + ' mln' } },
+      series: [
+        bar('Oszczędności', d.savings, '#0ea5e9'),
+        bar('Nieruchomości', d.real_estate, '#f59e0b'),
+        bar('Pozostałe', d.other, '#64748b'),
+        bar('Zobowiązania', d.liabilities, '#ef4444'),
+        { name: 'Majątek netto', type: 'line', data: d.net, symbolSize: 8, lineStyle: { width: 3, color: '#0f172a' }, itemStyle: { color: '#0f172a' } },
+      ],
+    });
+    new ResizeObserver(() => chart.resize()).observe(tl);
+  }
+  window.addEventListener('resize', () => Object.values(donuts).forEach(c => c.resize()));
+
+  document.querySelectorAll('.vote-filter').forEach(btn => btn.addEventListener('click', () => {
+    document.querySelectorAll('.vote-filter').forEach(b => {
+      const on = b === btn;
+      b.classList.toggle('bg-slate-900', on); b.classList.toggle('text-white', on);
+      b.classList.toggle('bg-slate-100', !on); b.classList.toggle('text-slate-600', !on);
+    });
+  }));
+})();
+</script>
+{% endblock %}

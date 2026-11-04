@@ -1,0 +1,61 @@
+{% load static %}<!DOCTYPE html>
+<html lang="pl" class="h-full">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Sejm Watch{% endblock %} · Sejm Watch</title>
+  <meta name="description" content="Jak głosują posłowie i kluby, czym się zajmują i co deklarują w oświadczeniach majątkowych.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
+  <script>
+    tailwind.config = {
+      theme: { extend: { fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'] } } }
+    }
+  </script>
+  <script src="https://unpkg.com/htmx.org@2.0.4" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+  <style>
+    .htmx-request .htmx-indicator { opacity: 1 }
+    .htmx-indicator { opacity: 0; transition: opacity .2s }
+    .htmx-request.htmx-fade { opacity: .55; transition: opacity .2s }
+  </style>
+  {% block head %}{% endblock %}
+</head>
+<body class="h-full bg-slate-50 text-slate-900 antialiased font-sans">
+<div class="min-h-full flex flex-col">
+  <header class="sticky top-0 z-30 bg-white/90 backdrop-blur border-b border-slate-200">
+    <div class="mx-auto max-w-7xl px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
+      <a href="{% url 'home' %}" class="flex items-center gap-2.5 shrink-0">
+        <span class="grid h-8 w-8 overflow-hidden rounded-lg ring-1 ring-slate-200">
+          <span class="bg-white"></span><span class="bg-red-600"></span>
+        </span>
+        <span class="hidden sm:inline text-lg font-extrabold tracking-tight">Sejm<span class="text-red-600">Watch</span></span>
+      </a>
+      {% with name=request.resolver_match.url_name %}
+      <nav class="flex items-center gap-1 text-sm font-medium overflow-x-auto">
+        <a href="{% url 'voting_list' %}" class="rounded-lg px-3 py-2 {% if 'voting' in name %}bg-slate-900 text-white{% else %}text-slate-600 hover:bg-slate-100{% endif %}">Głosowania</a>
+        <a href="{% url 'mp_list' %}" class="rounded-lg px-3 py-2 {% if 'mp_' in name %}bg-slate-900 text-white{% else %}text-slate-600 hover:bg-slate-100{% endif %}">Posłowie</a>
+        <a href="{% url 'club_list' %}" class="rounded-lg px-3 py-2 {% if 'club' in name %}bg-slate-900 text-white{% else %}text-slate-600 hover:bg-slate-100{% endif %}">Kluby</a>
+      </nav>
+      {% endwith %}
+    </div>
+  </header>
+
+  <main class="flex-1">
+    <div class="mx-auto max-w-7xl px-4 sm:px-6 py-6 sm:py-10">
+      {% block content %}{% endblock %}
+    </div>
+  </main>
+
+  <footer class="border-t border-slate-200 bg-white">
+    <div class="mx-auto max-w-7xl px-4 sm:px-6 py-6 text-sm text-slate-500 flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between">
+      <p>Dane o głosowaniach i posłach: <a class="underline hover:text-slate-700" href="https://api.sejm.gov.pl" target="_blank" rel="noopener">API Sejmu RP</a>.
+        Oświadczenia majątkowe są analizowane automatycznie i mogą zawierać błędy.</p>
+      <p>{% if last_sync %}Ostatnia synchronizacja: {{ last_sync|date:"j E Y, H:i" }}{% else %}Brak synchronizacji{% endif %}</p>
+    </div>
+  </footer>
+</div>
+{% block scripts %}{% endblock %}
+</body>
+</html>

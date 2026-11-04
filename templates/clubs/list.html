@@ -1,0 +1,35 @@
+{% extends "base.html" %}{% load ui %}
+{% block title %}Kluby i koła{% endblock %}
+{% block content %}
+<h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight">Kluby i koła poselskie</h1>
+<p class="mt-1 text-slate-500">Liczebność i spójność głosowania w zsynchronizowanych głosowaniach.</p>
+
+{% if clubs %}
+<ul class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+  {% for c in clubs %}
+  <li>
+    <a href="{{ c.get_absolute_url }}" class="group block h-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:border-slate-300 hover:shadow-md">
+      <div class="h-1.5" style="background: {{ c.code|clubcolor }}"></div>
+      <div class="p-5">
+        <div class="flex items-start justify-between gap-3">
+          <div class="min-w-0">
+            <p class="text-lg font-bold group-hover:text-red-700">{{ c.code }}</p>
+            <p class="line-clamp-2 text-sm text-slate-500">{{ c.name }}</p>
+          </div>
+          <span class="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-sm font-bold tabular-nums">{{ c.members_count }}</span>
+        </div>
+        {% if c.cohesion is not None and not c.is_independent %}
+        <div class="mt-4">
+          <div class="flex justify-between text-xs text-slate-500"><span>Spójność</span><span class="font-semibold text-slate-700">{{ c.cohesion|ratio_pct }}</span></div>
+          <div class="mt-1 h-1.5 rounded-full bg-slate-100"><div class="h-1.5 rounded-full" style="width: {% widthratio c.cohesion 1 100 %}%; background: {{ c.code|clubcolor }}"></div></div>
+        </div>
+        {% endif %}
+      </div>
+    </a>
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<div class="mt-6">{% include "components/empty_sync.html" %}</div>
+{% endif %}
+{% endblock %}

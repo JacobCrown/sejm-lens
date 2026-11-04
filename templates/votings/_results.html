@@ -1,0 +1,37 @@
+{% load ui humanize %}
+{% if page.paginator.count %}
+<p class="mb-3 text-sm text-slate-500">Znaleziono {{ total|intcomma }} głosowań</p>
+<ul class="divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+  {% for v in page %}
+  <li>
+    <a href="{{ v.get_absolute_url }}" class="grid gap-3 px-4 py-4 sm:px-5 hover:bg-slate-50 md:grid-cols-[7rem_1fr_14rem] md:items-center">
+      <div class="text-xs text-slate-500">
+        <div class="font-semibold text-slate-700">{{ v.date|date:"j E Y" }}</div>
+        <div>pos. {{ v.sitting.number }} · nr {{ v.number }}</div>
+      </div>
+      <div class="min-w-0">
+        <p class="line-clamp-2 font-medium text-slate-900">{{ v.display_title }}</p>
+        {% if v.topic and v.title != v.topic %}<p class="mt-0.5 line-clamp-1 text-sm text-slate-500">{{ v.title }}</p>{% endif %}
+      </div>
+      <div>
+        {% if v.is_list_vote %}
+          {% include "components/result_badge.html" with voting=v %}
+        {% else %}
+        <div class="flex items-center justify-between gap-2 text-xs">
+          <span class="tabular-nums text-slate-600"><b class="text-emerald-600">{{ v.yes }}</b> / <b class="text-red-600">{{ v.no }}</b> / <b class="text-amber-600">{{ v.abstain }}</b></span>
+          {% include "components/result_badge.html" with voting=v %}
+        </div>
+        <div class="mt-2">{% include "components/vote_bar.html" with yes=v.yes no=v.no abstain=v.abstain rest=v.not_participating total=460 %}</div>
+        {% endif %}
+      </div>
+    </a>
+  </li>
+  {% endfor %}
+</ul>
+{% include "components/pagination.html" with target="#results" %}
+{% else %}
+<div class="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center">
+  <h3 class="font-semibold">Brak głosowań spełniających kryteria</h3>
+  <p class="mt-1 text-sm text-slate-500">Zmień wyszukiwaną frazę albo filtry. Jeśli baza jest pusta, uruchom <code class="rounded bg-slate-100 px-1">python manage.py sync_sejm</code>.</p>
+</div>
+{% endif %}

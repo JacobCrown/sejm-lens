@@ -1,0 +1,13 @@
+{% load ui %}{% if page.has_other_pages %}
+<nav class="mt-6 flex items-center justify-between gap-3 text-sm" aria-label="Paginacja">
+  {% if page.has_previous %}
+  <a href="{{ base }}{% query page=page.previous_page_number %}" hx-get="{{ base }}{% query page=page.previous_page_number %}" hx-target="{{ target }}" hx-push-url="{{ push|default:'true' }}"
+     class="rounded-xl border border-slate-200 bg-white px-4 py-2 font-medium hover:bg-slate-50">← Poprzednia</a>
+  {% else %}<span></span>{% endif %}
+  <span class="text-slate-500">Strona {{ page.number }} z {{ page.paginator.num_pages }}</span>
+  {% if page.has_next %}
+  <a href="{{ base }}{% query page=page.next_page_number %}" hx-get="{{ base }}{% query page=page.next_page_number %}" hx-target="{{ target }}" hx-push-url="{{ push|default:'true' }}"
+     class="rounded-xl border border-slate-200 bg-white px-4 py-2 font-medium hover:bg-slate-50">Następna →</a>
+  {% else %}<span></span>{% endif %}
+</nav>
+{% endif %}

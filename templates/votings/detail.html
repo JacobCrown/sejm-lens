@@ -1,0 +1,182 @@
+{% extends "base.html" %}{% load ui %}
+{% block title %}{{ voting.display_title|truncatechars:60 }}{% endblock %}
+{% block content %}
+<nav class="text-sm text-slate-500" aria-label="Okruszki">
+  <a href="{% url 'voting_list' %}" class="hover:text-slate-700">Głosowania</a>
+  <span class="mx-1">/</span>
+  <a href="{% url 'voting_list' %}?sitting={{ voting.sitting.number }}" class="hover:text-slate-700">Posiedzenie nr {{ voting.sitting.number }}</a>
+  <span class="mx-1">/</span><span class="text-slate-700">Głosowanie nr {{ voting.number }}</span>
+</nav>
+
+<header class="mt-4 rounded-2xl border border-slate-200 bg-white p-5 sm:p-7 shadow-sm">
+  <div class="flex flex-wrap items-center gap-2 text-sm text-slate-500">
+    {% include "components/result_badge.html" %}
+    <span>{{ voting.date|date:"l, j E Y, H:i" }}</span>
+    <span>·</span><span>{{ voting.get_kind_display }}</span>
+    {% if voting.majority_type %}<span>·</span><span>{% if voting.majority_type == "SIMPLE_MAJORITY" %}większość zwykła{% elif voting.majority_type == "ABSOLUTE_MAJORITY" %}większość bezwzględna{% else %}{{ voting.majority_type|lower }}{% endif %}{% if voting.majority_votes and voting.majority_type != "SIMPLE_MAJORITY" %} ({{ voting.majority_votes }} głosów){% endif %}</span>{% endif %}
+  </div>
+  <h1 class="mt-3 text-xl sm:text-3xl font-extrabold tracking-tight leading-tight">{{ voting.display_title }}</h1>
+  {% if voting.title != voting.display_title %}<p class="mt-2 text-slate-600">{{ voting.title }}</p>{% endif %}
+
+  {% if not voting.is_list_vote %}
+  <dl class="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+    <div class="rounded-xl bg-emerald-50 p-4"><dt class="text-xs font-medium text-emerald-700">Za</dt><dd class="text-3xl font-extrabold text-emerald-700 tabular-nums">{{ voting.yes }}</dd></div>
+    <div class="rounded-xl bg-red-50 p-4"><dt class="text-xs font-medium text-red-700">Przeciw</dt><dd class="text-3xl font-extrabold text-red-700 tabular-nums">{{ voting.no }}</dd></div>
+    <div class="rounded-xl bg-amber-50 p-4"><dt class="text-xs font-medium text-amber-700">Wstrzymało się</dt><dd class="text-3xl font-extrabold text-amber-700 tabular-nums">{{ voting.abstain }}</dd></div>
+    <div class="rounded-xl bg-slate-100 p-4"><dt class="text-xs font-medium text-slate-600">Nie głosowało</dt><dd class="text-3xl font-extrabold text-slate-700 tabular-nums">{{ voting.not_participating }}</dd></div>
+  </dl>
+  {% else %}
+  <ul class="mt-6 grid gap-3 sm:grid-cols-2">
+    {% for opt in voting.options %}
+    <li class="rounded-xl bg-indigo-50 p-4 flex items-center justify-between"><span class="font-semibold text-indigo-900">{{ opt.option }}</span><span class="text-2xl font-extrabold text-indigo-700 tabular-nums">{{ opt.votes }}</span></li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+
+  <div class="mt-6 flex flex-wrap items-center gap-3 text-sm">
+    {% if voting.pdf_url %}<a href="{{ voting.pdf_url }}" target="_blank" rel="noopener" class="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-1.5 font-medium hover:bg-slate-50">Protokół PDF z Sejmu ↗</a>{% endif %}
+    <span class="flex-1"></span>
+    {% if prev %}<a href="{{ prev.get_absolute_url }}" class="rounded-xl border border-slate-200 px-3 py-1.5 font-medium hover:bg-slate-50">← nr {{ prev.number }}</a>{% endif %}
+    {% if next %}<a href="{{ next.get_absolute_url }}" class="rounded-xl border border-slate-200 px-3 py-1.5 font-medium hover:bg-slate-50">nr {{ next.number }} →</a>{% endif %}
+  </div>
+</header>
+
+{% if hemicycle %}
+<section class="mt-8 rounded-2xl border border-slate-200 bg-white p-5 sm:p-7 shadow-sm">
+  <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div>
+      <h2 class="text-lg font-bold">Sala posiedzeń</h2>
+      <p class="text-sm text-slate-500">Każda kropka to jeden poseł. Najedź, aby zobaczyć szczegóły, kliknij, aby otworzyć profil.</p>
+    </div>
+    <div class="inline-flex rounded-xl bg-slate-100 p-1 text-sm font-medium" role="group" aria-label="Kolorowanie">
+      <button type="button" data-mode="choice" class="hemi-mode rounded-lg px-3 py-1.5 bg-white shadow-sm">Według głosu</button>
+      <button type="button" data-mode="club" class="hemi-mode rounded-lg px-3 py-1.5 text-slate-600">Według klubu</button>
+    </div>
+  </div>
+  <div id="hemicycle" class="mt-4 h-[260px] sm:h-[420px] w-full"></div>
+  <div class="mt-2 flex flex-wrap justify-center gap-x-4 gap-y-1 text-xs text-slate-600" id="hemi-legend-choice">
+    {% if voting.is_list_vote %}<span class="inline-flex items-center gap-1.5"><span class="h-2.5 w-2.5 rounded-full" style="background:{{ 'VOTE_VALID'|choice_color }}"></span>Głos oddany</span>
+    {% else %}
+    <span class="inline-flex items-center gap-1.5"><span class="h-2.5 w-2.5 rounded-full bg-emerald-600"></span>Za</span>
+    <span class="inline-flex items-center gap-1.5"><span class="h-2.5 w-2.5 rounded-full bg-red-600"></span>Przeciw</span>
+    <span class="inline-flex items-center gap-1.5"><span class="h-2.5 w-2.5 rounded-full bg-amber-500"></span>Wstrzymał się</span>
+    <span class="inline-flex items-center gap-1.5"><span class="h-2.5 w-2.5 rounded-full bg-slate-400"></span>Obecny, nie głosował</span>
+    {% endif %}
+    <span class="inline-flex items-center gap-1.5"><span class="h-2.5 w-2.5 rounded-full bg-zinc-300"></span>Nieobecny</span>
+  </div>
+  <div class="mt-2 hidden flex-wrap justify-center gap-x-4 gap-y-1 text-xs text-slate-600" id="hemi-legend-club">
+    {% for row in club_rows %}<span class="inline-flex items-center gap-1.5"><span class="h-2.5 w-2.5 rounded-full" style="background:{{ row.club.code|clubcolor }}"></span>{{ row.club.code }}</span>{% endfor %}
+  </div>
+</section>
+{% endif %}
+
+{% if club_rows %}
+<section class="mt-8 rounded-2xl border border-slate-200 bg-white shadow-sm">
+  <div class="p-5 sm:p-7 pb-0 sm:pb-0">
+    <h2 class="text-lg font-bold">Jak głosowały kluby</h2>
+    <p class="text-sm text-slate-500">Procent członków klubu, którzy zagłosowali w dany sposób. Spójność: 100% oznacza, że wszyscy obecni głosowali tak samo.</p>
+  </div>
+  <div class="mt-4 overflow-x-auto">
+    <table class="min-w-full text-sm">
+      <thead class="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+        <tr>
+          <th class="px-5 py-3 font-semibold">Klub</th>
+          <th class="px-3 py-3 font-semibold w-48 hidden md:table-cell">Rozkład</th>
+          <th class="px-3 py-3 font-semibold text-right">Za</th>
+          <th class="px-3 py-3 font-semibold text-right">Przeciw</th>
+          <th class="px-3 py-3 font-semibold text-right">Wstrz.</th>
+          <th class="px-3 py-3 font-semibold text-right">Nie gł.</th>
+          <th class="px-3 py-3 font-semibold">Większość klubu</th>
+          <th class="px-5 py-3 font-semibold text-right">Spójność</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for row in club_rows %}
+        <tr class="hover:bg-slate-50">
+          <td class="px-5 py-3 whitespace-nowrap"><a href="{% url 'club_detail' row.club.code %}" class="inline-flex items-center gap-2 font-semibold hover:text-red-700"><span class="h-2.5 w-2.5 rounded-full" style="background:{{ row.club.code|clubcolor }}"></span>{{ row.club.code }}</a> <span class="text-xs text-slate-400">({{ row.total }})</span></td>
+          <td class="px-3 py-3 hidden md:table-cell">{% include "components/vote_bar.html" with yes=row.yes no=row.no abstain=row.abstain rest=row.not_voted total=row.total %}</td>
+          <td class="px-3 py-3 text-right tabular-nums"><span class="font-semibold text-emerald-700">{{ row.yes_pct|pct:0 }}</span> <span class="text-xs text-slate-400">{{ row.yes }}</span></td>
+          <td class="px-3 py-3 text-right tabular-nums"><span class="font-semibold text-red-700">{{ row.no_pct|pct:0 }}</span> <span class="text-xs text-slate-400">{{ row.no }}</span></td>
+          <td class="px-3 py-3 text-right tabular-nums"><span class="font-semibold text-amber-700">{{ row.abstain_pct|pct:0 }}</span> <span class="text-xs text-slate-400">{{ row.abstain }}</span></td>
+          <td class="px-3 py-3 text-right tabular-nums text-slate-500">{{ row.not_voted_pct|pct:0 }} <span class="text-xs text-slate-400">{{ row.not_voted }}</span></td>
+          <td class="px-3 py-3"><span class="inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ring-1 ring-inset {{ row.majority_choice|choice_badge }}">{{ row.majority_choice|choice_label }}</span></td>
+          <td class="px-5 py-3 text-right tabular-nums">{{ row.cohesion|ratio_pct:0 }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
+{% if not voting.is_list_vote %}
+<section class="mt-8 rounded-2xl border border-slate-200 bg-white p-5 sm:p-7 shadow-sm">
+  <h2 class="text-lg font-bold">Głosowali wbrew swojemu klubowi</h2>
+  {% if rebels %}
+  <p class="text-sm text-slate-500">Liczba posłów, którzy zagłosowali inaczej niż większość ich klubu: <b>{{ rebels|length }}</b>.</p>
+  <ul class="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+    {% for v in rebels %}
+    <li>
+      <a href="{{ v.mp.get_absolute_url }}" class="flex items-center gap-3 rounded-xl border border-slate-200 p-3 hover:border-slate-300 hover:bg-slate-50">
+        <img src="{{ v.mp.photo_mini_url }}" alt="" loading="lazy" class="h-10 w-10 rounded-full object-cover bg-slate-100">
+        <div class="min-w-0 flex-1">
+          <p class="truncate font-semibold">{{ v.mp.full_name }}</p>
+          <p class="text-xs text-slate-500"><span class="font-medium" style="color:{{ v.club.code|clubcolor }}">{{ v.club.code }}</span> głosował(a): <b>{{ v.choice|choice_label }}</b>, klub: {{ v.club_majority|choice_label|lower }}</p>
+        </div>
+      </a>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="mt-2 text-sm text-slate-500">Nikt. Wszyscy obecni posłowie zagłosowali tak jak większość ich klubu.</p>
+  {% endif %}
+</section>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if hemicycle %}
+{{ hemicycle|json_script:"hemicycle-data" }}
+<script>
+(function () {
+  const seats = JSON.parse(document.getElementById('hemicycle-data').textContent);
+  const el = document.getElementById('hemicycle');
+  const chart = echarts.init(el, null, { renderer: 'canvas' });
+  let mode = 'choice';
+  const size = () => Math.max(4, Math.min(16, el.clientWidth / 62));
+  function render() {
+    chart.setOption({
+      animation: false,
+      grid: { left: 4, right: 4, top: 4, bottom: 4 },
+      xAxis: { min: -1.03, max: 1.03, show: false },
+      yAxis: { min: -0.02, max: 1.03, show: false },
+      tooltip: {
+        trigger: 'item',
+        formatter: p => `<b>${p.data.name}</b><br>${p.data.club} · ${p.data.choice}`,
+      },
+      series: [{
+        type: 'scatter',
+        symbolSize: size(),
+        data: seats.map(s => ({ ...s, itemStyle: { color: mode === 'choice' ? s.choiceColor : s.clubColor } })),
+        emphasis: { scale: 1.6 },
+      }],
+    });
+  }
+  render();
+  chart.on('click', p => { if (p.data && p.data.url) window.location = p.data.url; });
+  new ResizeObserver(() => { chart.resize(); render(); }).observe(el);
+  document.querySelectorAll('.hemi-mode').forEach(btn => btn.addEventListener('click', () => {
+    mode = btn.dataset.mode;
+    document.querySelectorAll('.hemi-mode').forEach(b => {
+      const on = b === btn;
+      b.classList.toggle('bg-white', on); b.classList.toggle('shadow-sm', on); b.classList.toggle('text-slate-600', !on);
+    });
+    document.getElementById('hemi-legend-choice').classList.toggle('hidden', mode !== 'choice');
+    document.getElementById('hemi-legend-club').classList.toggle('hidden', mode !== 'club');
+    document.getElementById('hemi-legend-club').classList.toggle('flex', mode === 'club');
+    render();
+  }));
+})();
+</script>
+{% endif %}
+{% endblock %}

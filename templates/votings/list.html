@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Głosowania{% endblock %}
+{% block content %}
+<div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+  <div>
+    <h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight">Głosowania</h1>
+    <p class="mt-1 text-slate-500">Wyniki głosowań na posiedzeniach Sejmu z podziałem na kluby.</p>
+  </div>
+</div>
+
+<form class="mt-6 grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:grid-cols-[1fr_auto_auto]"
+      hx-get="{% url 'voting_list' %}" hx-target="#results" hx-push-url="true"
+      hx-trigger="input changed delay:300ms from:input[name=q], change from:select, submit">
+  <label class="relative">
+    <span class="sr-only">Szukaj</span>
+    <svg class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.2-5.2M17 10.5a6.5 6.5 0 11-13 0 6.5 6.5 0 0113 0z"/></svg>
+    <input name="q" value="{{ q }}" type="search" placeholder="Szukaj w tytułach, np. „podatek”, „ustawa o...”" class="w-full rounded-xl border-slate-300 pl-9 focus:border-red-500 focus:ring-red-500">
+  </label>
+  <select name="sitting" class="rounded-xl border-slate-300 focus:border-red-500 focus:ring-red-500" aria-label="Posiedzenie">
+    <option value="">Wszystkie posiedzenia</option>
+    {% for s in sittings %}<option value="{{ s.number }}" {% if sitting == s.number|stringformat:"d" %}selected{% endif %}>Posiedzenie nr {{ s.number }}</option>{% endfor %}
+  </select>
+  <select name="result" class="rounded-xl border-slate-300 focus:border-red-500 focus:ring-red-500" aria-label="Wynik">
+    <option value="">Każdy wynik</option>
+    <option value="passed" {% if result == "passed" %}selected{% endif %}>Przyjęte</option>
+    <option value="rejected" {% if result == "rejected" %}selected{% endif %}>Odrzucone</option>
+  </select>
+</form>
+
+<div id="results" class="htmx-fade mt-6">
+  {% include "votings/_results.html" %}
+</div>
+{% endblock %}

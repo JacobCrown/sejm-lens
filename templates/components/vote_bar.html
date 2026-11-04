@@ -1,0 +1,8 @@
+{% load ui %}{# Pasek: yes, no, abstain, rest, total #}
+<div class="flex h-2 w-full overflow-hidden rounded-full bg-slate-100" role="img"
+     aria-label="Za {{ yes }}, przeciw {{ no }}, wstrzymało się {{ abstain }}, nie głosowało {{ rest }}">
+  <div class="bg-emerald-500" style="width: {% widthratio yes total 100 %}%"></div>
+  <div class="bg-red-500" style="width: {% widthratio no total 100 %}%"></div>
+  <div class="bg-amber-400" style="width: {% widthratio abstain total 100 %}%"></div>
+  <div class="bg-slate-300" style="width: {% widthratio rest total 100 %}%"></div>
+</div>

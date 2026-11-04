@@ -1,0 +1,38 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: sejm
+      POSTGRES_PASSWORD: sejm
+      POSTGRES_DB: sejmwatch
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sejm -d sejmwatch"]
+      interval: 5s
+      retries: 10
+
+  web:
+    build: .
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py runserver 0.0.0.0:8642"
+    environment:
+      DATABASE_URL: postgres://sejm:sejm@db:5432/sejmwatch
+      DEBUG: "true"
+      ALLOWED_HOSTS: "*"
+    env_file:
+      - path: .env
+        required: false
+    ports:
+      - "8642:8642"
+    volumes:
+      - ./media:/app/media
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:

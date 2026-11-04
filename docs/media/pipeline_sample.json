@@ -1,0 +1,63 @@
+{
+  "ocr": {
+    "engine": "paddleocr",
+    "confidence": 0.9874884915061004,
+    "excerpt": [
+      "Zasoby pieniężne:",
+      "- środki pienięzne zgromadzone w walucie polskiej: 446015,08 PLN(wspólność majatkowa)",
+      "- środki pieniężne zgromadzone w walucie obcej:  3100 euro, 420$ (wspólność majątkowa)",
+      "- papiery wartościowe: Akcje spółki PLO – Polski Holding Nieruchomości – własność odrębna żony",
+      "nabyta w drodze spadku",
+      "na kwotę:  1 500,00 PLN",
+      "II.",
+      "1. Dom o powierzchni: 187,1 m²,",
+      "o wartości:  okolo 520 000 PLN",
+      "tytuł prawny:  Właściciel",
+      "2. Mieszkanie o powierzchni: 37 m²,",
+      "o wartości:  około 290 000 PLN"
+    ]
+  },
+  "llm": {
+    "model": "deepseek/deepseek-v4.1-flash-1017",
+    "prompt_tokens": 28457,
+    "completion_tokens": 24048,
+    "cost_usd": 0.01375142,
+    "calls": 3
+  },
+  "structured": {
+    "savings_pln": [
+      {
+        "label": "środki pieniężne zgromadzone w walucie polskiej (wspólność majątkowa)",
+        "amount": 446015.08,
+        "quote": "środki pienięzne zgromadzone w walucie polskiej: 446015,08 PLN(wspólność majatkowa)"
+      }
+    ],
+    "real_estate": [
+      {
+        "kind": "HOUSE",
+        "area_m2": 187.1,
+        "amount": 520000.0
+      },
+      {
+        "kind": "APARTMENT",
+        "area_m2": 37.0,
+        "amount": 290000.0
+      }
+    ]
+  },
+  "verification": {
+    "checks": 53,
+    "issues": 2,
+    "confidence": 0.926
+  },
+  "summary": {
+    "net_worth": 1764646.58,
+    "savings": 462646.58,
+    "real_estate": 1284900.0,
+    "liabilities": 0.0
+  },
+  "declaration": {
+    "year": 2023,
+    "kind": "ANNUAL"
+  }
+}

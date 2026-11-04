@@ -1,0 +1,2 @@
+{% load ui %}{% if club %}<a href="{% url 'club_detail' club.code %}" class="inline-flex items-center gap-1.5 rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-slate-700 ring-1 ring-inset ring-slate-200 hover:ring-slate-300">
+  <span class="h-2 w-2 rounded-full" style="background: {{ club.code|clubcolor }}"></span>{{ club.code }}</a>{% else %}<span class="text-xs text-slate-400">bez klubu</span>{% endif %}
