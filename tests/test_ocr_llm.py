@@ -311,6 +311,7 @@ def test_ocr_pdf_errors():
         ocr_pdf(b"to nie pdf", type("E", (), {"name": "e", "recognize": lambda s, i: []})())
 
 
+@pytest.mark.ocr
 def test_missing_paddle_gives_helpful_error(settings, monkeypatch):
     import builtins
 
@@ -329,6 +330,7 @@ def test_missing_paddle_gives_helpful_error(settings, monkeypatch):
         PaddleOCREngine("pl", "cpu")
 
 
+@pytest.mark.ocr
 @pytest.mark.skipif(not __import__("os").environ.get("RUN_OCR_TESTS"), reason="wolny test; ustaw RUN_OCR_TESTS=1")
 def test_real_paddleocr_reads_a_rendered_page():
     from PIL import Image, ImageDraw, ImageFont
