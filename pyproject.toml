@@ -7,17 +7,25 @@ dependencies = [
     "curl-cffi>=0.17.0",
     "django>=5.1,<5.3",
     "django-environ>=0.14.0",
+    "gunicorn>=26.2.0",
     "httpx>=0.28.1",
     "pillow>=13.0.0",
     "psycopg[binary]>=3.3.6",
     "pydantic>=2.14.2",
     "pypdfium2>=5.14.0",
+    "whitenoise>=6.12.0",
 ]
 
 [project.optional-dependencies]
 ocr = [
     "paddleocr>=3.0",
     "paddlepaddle>=3.0",
+]
+# CUDA 12.9 wheel for Linux x86_64 / Python 3.12, including Blackwell (RTX 50, sm_120).
+# Do not install together with the "ocr" extra; both ship the "paddle" module.
+ocr-gpu = [
+    "paddleocr>=3.0",
+    "paddlepaddle-gpu @ https://paddle-whl.cdn.bcebos.com/stable/cu129/paddlepaddle-gpu/paddlepaddle_gpu-3.3.1-cp312-cp312-linux_x86_64.whl ; python_version == '3.12' and sys_platform == 'linux' and platform_machine == 'x86_64'",
 ]
 
 [dependency-groups]
@@ -28,6 +36,12 @@ dev = [
 
 [tool.uv]
 package = false
+conflicts = [
+    [
+        { extra = "ocr" },
+        { extra = "ocr-gpu" },
+    ],
+]
 
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "config.settings"

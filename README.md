@@ -156,6 +156,7 @@ Open <http://localhost:8642>. The admin is at `/admin/` (create an account with 
 
 ```bash
 uv sync --extra ocr                                          # PaddleOCR and PaddlePaddle (CPU)
+uv sync --extra ocr-gpu                                      # PaddlePaddle GPU, CUDA 12.9, Linux x86_64, Python 3.12
 # in .env: ASSET_EXTRACTOR=ocr_llm and the LLM_* settings below
 uv run python manage.py check_llm                            # one tiny request to verify the provider
 uv run python manage.py sync_sejm --skip-votings             # MPs first
@@ -226,7 +227,7 @@ If the provider rejects a parameter (for example `temperature` for reasoning mod
 | `DECLARATION_FETCH_DELAY` | `0.5` | Pause (seconds) between requests to sejm.gov.pl and ORKA during `sync_declarations --fetch` |
 | `ASSET_EXTRACTOR` | `mock` | `mock` or `ocr_llm` |
 | `ASSET_REVIEW_THRESHOLD` | `0.7` | Below this confidence a declaration needs review |
-| `OCR_ENGINE` / `OCR_LANG` / `OCR_DEVICE` / `OCR_RENDER_SCALE` | `paddle` / `pl` / `cpu` / `1.6` | PaddleOCR settings. A higher scale is more accurate but slower. Use `OCR_DEVICE=gpu` with `paddlepaddle-gpu` |
+| `OCR_ENGINE` / `OCR_LANG` / `OCR_DEVICE` / `OCR_RENDER_SCALE` | `paddle` / `pl` / `cpu` / `1.6` | PaddleOCR settings. A higher scale is more accurate but slower. For a GPU install `uv sync --extra ocr-gpu` (CUDA 12.9) and set `OCR_DEVICE=gpu` |
 | `LLM_PROVIDER` / `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL` | `openai` / empty / empty / `gpt-4o-mini` | OpenAI-compatible LLM provider |
 | `LLM_TEMPERATURE` / `LLM_MAX_TOKENS` / `LLM_RESPONSE_FORMAT` / `LLM_TIMEOUT` | `0` / empty / `json_object` / `180` | Request parameters (`json_object`, `json_schema` or `none` for providers without a JSON mode) |
 | `LLM_EXTRA_HEADERS` / `LLM_EXTRA_BODY` | `{}` | Extra headers and request fields (JSON) |

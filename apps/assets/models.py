@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 
 from apps.core.models import RawDocument
@@ -75,7 +76,9 @@ class AssetDeclaration(models.Model):
 
     @property
     def pdf_url(self) -> str:
-        if self.raw and self.raw.file:
+        # Local copies are only served by Django in DEBUG (see config/urls.py). In production
+        # link to the official source, so the link never points at a missing /media/ file.
+        if settings.DEBUG and self.raw and self.raw.file:
             return self.raw.file.url
         return self.source_url
 

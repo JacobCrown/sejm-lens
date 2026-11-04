@@ -1,0 +1,25 @@
+# Render Blueprint: https://render.com/docs/blueprint-spec
+# Deployed from the `prod` branch. Pushing to `prod` redeploys automatically.
+# See DEPLOY.md for the full setup.
+services:
+  - type: web
+    name: sejm-lens
+    runtime: docker
+    plan: free
+    region: frankfurt
+    branch: prod
+    autoDeploy: true
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /
+    envVars:
+      - key: DEBUG
+        value: "false"
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false # paste the Neon connection string (direct, with ?sslmode=require) when Render asks
+      - key: ASSET_EXTRACTOR
+        value: mock # production never runs OCR; the data is seeded from a local machine
+      - key: GUNICORN_WORKERS
+        value: "2"
