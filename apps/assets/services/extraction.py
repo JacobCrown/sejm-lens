@@ -73,10 +73,13 @@ def validate(result: ExtractedDeclaration, year: int) -> tuple[list[AssetItem], 
 
 
 def _read_pdf(declaration: AssetDeclaration) -> bytes | None:
-    if declaration.raw and declaration.raw.file:
+    if not declaration.raw or not declaration.raw.file:
+        return None
+    try:
         with declaration.raw.file.open("rb") as fh:
             return fh.read()
-    return None
+    except FileNotFoundError:
+        return None
 
 
 def run_extraction(

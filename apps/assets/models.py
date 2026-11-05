@@ -58,6 +58,15 @@ class AssetDeclaration(models.Model):
     ocr_text = models.TextField(blank=True, help_text="OCR text; cached so the slow OCR does not have to run again")
     ocr_engine = models.CharField(max_length=32, blank=True)
     ocr_confidence = models.FloatField(null=True, blank=True)
+    ocr_pages = models.PositiveSmallIntegerField(null=True, blank=True)
+    ocr_cost_usd = models.DecimalField(
+        max_digits=12, decimal_places=6, null=True, blank=True,
+        help_text="What Datalab billed for this OCR, in USD",
+    )
+    ocr_response = models.JSONField(
+        null=True, blank=True,
+        help_text="Stored Datalab convert response, without extracted images",
+    )
     structured = models.JSONField(null=True, blank=True, help_text="Full model answer matching schema.DeclarationData")
     verification = models.JSONField(null=True, blank=True, help_text="Report of checking the answer against the OCR text")
     created_at = models.DateTimeField(auto_now_add=True)

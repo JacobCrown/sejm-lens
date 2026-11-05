@@ -15,7 +15,7 @@
       {% if not club.is_current %}<p class="mt-2 inline-block rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-600">Klub historyczny</p>{% endif %}
     </div>
     <dl class="grid grid-cols-2 gap-3 sm:w-80">
-      <div class="rounded-xl bg-slate-50 p-4"><dt class="text-xs text-slate-500">Członkowie</dt><dd class="text-2xl font-extrabold tabular-nums">{{ members|length }}</dd></div>
+      <div class="rounded-xl bg-slate-50 p-4"><dt class="text-xs text-slate-500">Członkowie</dt><dd class="text-2xl font-extrabold tabular-nums">{{ member_count }}</dd></div>
       <div class="rounded-xl bg-slate-50 p-4"><dt class="text-xs text-slate-500">Spójność</dt><dd class="text-2xl font-extrabold tabular-nums">{% if club.is_independent %}-{% else %}{{ cohesion|ratio_pct }}{% endif %}</dd></div>
     </dl>
   </div>
@@ -61,22 +61,7 @@
   </aside>
 </div>
 
-<section class="mt-8">
-  <h2 class="text-lg font-bold">Członkowie ({{ members|length }})</h2>
-  {% if members %}
-  <ul class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-    {% for mp in members %}
-    <li>
-      <a href="{{ mp.get_absolute_url }}" class="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 hover:border-slate-300 hover:shadow-sm">
-        <img src="{{ mp.photo_mini_url }}" alt="" loading="lazy" class="h-10 w-10 rounded-full object-cover bg-slate-100">
-        <div class="min-w-0">
-          <p class="truncate text-sm font-semibold">{{ mp.full_name }}</p>
-          <p class="truncate text-xs text-slate-500">zgodność z klubem {{ mp.loyalty_pct|pct:0 }}</p>
-        </div>
-      </a>
-    </li>
-    {% endfor %}
-  </ul>
-  {% else %}<p class="mt-3 text-sm text-slate-500">Brak aktywnych członków.</p>{% endif %}
+<section id="club-members" class="mt-8 htmx-fade">
+  {% include "clubs/_members.html" %}
 </section>
 {% endblock %}

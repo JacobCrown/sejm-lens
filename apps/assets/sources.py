@@ -19,7 +19,7 @@ from urllib.parse import urljoin, urlparse
 from curl_cffi import requests as curl_requests
 from django.conf import settings
 
-from apps.core.raw import store_file
+from apps.core.raw import store_file, stored_file_exists
 from apps.parliament.models import MP
 
 from .models import AssetDeclaration
@@ -50,7 +50,18 @@ class ParsedCard:
 
 
 def new_session() -> curl_requests.Session:
-    return curl_requests.Session(impersonate="chrome")
+    session = curl_requests.Session(impersonate="chrome")
+    cookie = settings.SEJM_COOKIE.strip()
+    if cookie:
+        session.headers["Cookie"] = cookie
+    return session
+
+
+def _anti_bot_page(html: str) -> bool:
+    """The real card also loads /_Incapsula_Resource. Only the interstitial is a block."""
+    if 'name="$$viewid"' in html or "poselLoadContent" in html:
+        return False
+    return 'window["bobcmn"]' in html or "Human Verification" in html
 
 
 def download_pdf(url: str, session=None) -> bytes:
@@ -89,30 +100,48 @@ def import_declaration(
 
     source_id = f"{mp.term_id}/{mp.sejm_id:03d}/{ref.year}/{ref.kind}"
     filename = f"osw_{mp.sejm_id:03d}_{ref.year}_{ref.kind.lower()}.pdf"
+    existing = AssetDeclaration.objects.filter(mp=mp, year=ref.year, kind=ref.kind).select_related("raw").first()
+    file_missing = existing is not None and not stored_file_exists(existing.raw)
     raw, changed = store_file("declaration_pdf", source_id, content, filename, url=ref.url)
 
     declaration, created = AssetDeclaration.objects.get_or_create(mp=mp, year=ref.year, kind=ref.kind)
+    if file_missing and not created and not changed and declaration.raw_id == raw.id:
+        return declaration, True
     if created or changed or declaration.raw_id != raw.id:
         declaration.raw = raw
         declaration.source_url = ref.url
         declaration.status = AssetDeclaration.Status.PENDING
         declaration.is_demo = False
+        if changed:
+            declaration.ocr_text = ""
+            declaration.ocr_engine = ""
+            declaration.ocr_confidence = None
+            declaration.ocr_pages = None
+            declaration.ocr_cost_usd = None
+            declaration.ocr_response = None
         declaration.save()
         return declaration, True
     return declaration, False
 
 
 def find_imported(ref: DeclarationRef, term: int | None = None) -> AssetDeclaration | None:
-    """Returns the stored declaration for the same file (the URL contains the document id)."""
-    return AssetDeclaration.objects.filter(
-        mp__term_id=term or settings.SEJM_TERM,
-        mp__sejm_id=ref.mp_sejm_id,
-        year=ref.year,
-        kind=ref.kind,
-        source_url=ref.url,
-        is_demo=False,
-        raw__isnull=False,
-    ).first()
+    """Returns the stored declaration when the same PDF is still on disk."""
+    declaration = (
+        AssetDeclaration.objects.filter(
+            mp__term_id=term or settings.SEJM_TERM,
+            mp__sejm_id=ref.mp_sejm_id,
+            year=ref.year,
+            kind=ref.kind,
+            source_url=ref.url,
+            is_demo=False,
+            raw__isnull=False,
+        )
+        .select_related("raw")
+        .first()
+    )
+    if declaration is None or not stored_file_exists(declaration.raw):
+        return None
+    return declaration
 
 
 def read_manifest(path: str) -> list[DeclarationRef]:
@@ -224,6 +253,11 @@ class SejmSiteClient:
     def declarations(self, mp_sejm_id: int) -> ParsedCard:
         url = self.card_url(mp_sejm_id)
         page = self._request("get", url).text
+        if _anti_bot_page(page):
+            raise DeclarationSourceError(
+                "sejm.gov.pl returned an anti-bot page instead of the MP card. "
+                "Stopping so the command does not request every MP."
+            )
         view_id = re.search(r'name="\$\$viewid"[^>]*value="([^"]+)"', page)
         event_id = re.search(r"eventId = '([^']+)'", page)
         holder = re.search(r"poselLoadContent\(e, 'Majatek', '([^']+)'", page)

@@ -1,6 +1,6 @@
 import json
 
-from .schema import json_schema
+from .schema import strict_json_schema
 
 PROMPT_VERSION = "ocr-llm-2"
 
@@ -51,7 +51,7 @@ SCHEMA:
 
 
 def system_prompt() -> str:
-    return SYSTEM_PROMPT + json.dumps(json_schema(), ensure_ascii=False, separators=(",", ":"))
+    return SYSTEM_PROMPT + json.dumps(strict_json_schema(), ensure_ascii=False, separators=(",", ":"))
 
 
 def user_prompt(ocr_text: str, mp_name: str | None, year: int | None) -> str:

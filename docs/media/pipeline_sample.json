@@ -1,6 +1,6 @@
 {
   "ocr": {
-    "engine": "paddleocr",
+    "engine": "chandra",
     "confidence": 0.9874884915061004,
     "excerpt": [
       "Zasoby pieniężne:",

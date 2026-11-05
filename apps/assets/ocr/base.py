@@ -94,13 +94,15 @@ class OCREngine(Protocol):
 
 def get_ocr_engine(name: str | None = None) -> OCREngine:
     name = (name or settings.OCR_ENGINE).lower()
-    if name == "paddle":
-        try:
-            from .paddle import PaddleOCREngine
-        except ImportError as exc:
-            raise OCRError("PaddleOCR is not installed. Run: uv sync --extra ocr") from exc
-        return PaddleOCREngine.shared()
-    raise OCRError(f"Unknown OCR engine: {name!r} (available: paddle)")
+    if name in ("paddle", "paddle-vl", "paddleocr", "paddleocr-vl"):
+        raise OCRError("PaddleOCR was removed. OCR is Chandra now (OCR_ENGINE=chandra).")
+    if name != "chandra":
+        raise OCRError(f"Unknown OCR engine: {name!r} (available: chandra)")
+    try:
+        from .chandra import ChandraEngine
+    except ImportError as exc:
+        raise OCRError("Chandra is not installed. Run: uv sync --extra ocr") from exc
+    return ChandraEngine.shared()
 
 
 def ocr_pdf(pdf_bytes: bytes, engine: OCREngine | None = None, force_ocr: bool = False) -> OCRResult:

@@ -33,6 +33,13 @@ def store_json(source: str, source_id: str, payload, url: str = "") -> tuple[Raw
     return doc, True
 
 
+def stored_file_exists(doc: RawDocument | None) -> bool:
+    name = getattr(getattr(doc, "file", None), "name", "")
+    if not name:
+        return False
+    return doc.file.storage.exists(name)
+
+
 def store_file(
     source: str, source_id: str, content: bytes, filename: str, url: str = "",
     content_type: str = "application/pdf",
@@ -40,6 +47,9 @@ def store_file(
     digest = sha256_bytes(content)
     doc = RawDocument.objects.filter(source=source, source_id=source_id).first()
     if doc and doc.sha256 == digest:
+        if not stored_file_exists(doc):
+            doc.file.save(filename, ContentFile(content), save=False)
+            doc.save()
         return doc, False
     doc = doc or RawDocument(source=source, source_id=source_id)
     doc.url = url

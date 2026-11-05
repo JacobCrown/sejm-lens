@@ -1,3 +1,4 @@
+import os
 from dataclasses import dataclass
 
 import pytest
@@ -45,7 +46,9 @@ CARD_PAGE = """<html><form id="view:_id1" method="post">
 <input type="hidden" name="$$viewid" id="view:_id1__VUID" value="!abc!">
 </form><script>eventId = 'view:_id1:_id2:facetMain:_id191:loadData';
 dojo.connect(dojo.byId("osw"), "onclick", function(e) { poselLoadContent(e, 'Majatek', '%s'); });
-</script></html>""" % HOLDER
+</script>
+<script type="text/javascript" src="/_Incapsula_Resource?SWJIYLWA=719d34d31c8e3a6e6fffd425f7e032f3" async></script>
+</html>""" % HOLDER
 
 
 @dataclass
@@ -201,6 +204,83 @@ def test_fetch_second_run_downloads_nothing_new(fetch_env):
     assert AssetDeclaration.objects.count() == 12
     call_command("sync_declarations", "--fetch", "--force", "--mp", "1")
     assert len([r for r in fetch_env.requests if "orka" in r[1]]) == 2
+
+
+def test_limit_is_the_first_mps_by_id(fetch_env):
+    fetch_env.tables.clear()
+    fetch_env.pdfs.clear()
+    for mp_id in (1, 2, 3):
+        url = pdf_url(f"Y{mp_id}", f"OSW103_{mp_id:03d}.pdf")
+        fetch_env.tables[mp_id] = table(mp_id, [("III rok kadencji", "2026-04-30", url)])
+        fetch_env.pdfs[url] = make_pdf(str(mp_id))
+    call_command("sync_declarations", "--fetch", "--year", "2025", "--limit", "1")
+    assert set(AssetDeclaration.objects.values_list("mp__sejm_id", flat=True)) == {1}
+    fetch_env.requests.clear()
+    call_command("sync_declarations", "--fetch", "--latest", "--limit", "2")
+    assert [url for method, url in fetch_env.requests if "posel.xsp" in url and method == "GET"] == [
+        "https://www.sejm.gov.pl/sejm10.nsf/posel.xsp?id=001&type=A",
+        "https://www.sejm.gov.pl/sejm10.nsf/posel.xsp?id=002&type=A",
+    ]
+    assert not [url for _, url in fetch_env.requests if "OSW103_001" in url]
+    assert AssetDeclaration.objects.filter(mp__sejm_id=2, year=2025).exists()
+    assert not AssetDeclaration.objects.filter(mp__sejm_id=3, year=2025).exists()
+
+
+def test_missing_pdf_is_downloaded_again(fetch_env):
+    call_command("sync_declarations", "--fetch", "--mp", "1", "--year", "2023")
+    declaration = AssetDeclaration.objects.get(mp__sejm_id=1, year=2023, kind="ANNUAL")
+    declaration.ocr_text = "zostaje"
+    declaration.save(update_fields=["ocr_text"])
+    path = declaration.raw.file.path
+    fetch_env.requests.clear()
+    os.remove(path)
+    call_command("sync_declarations", "--fetch", "--mp", "1", "--year", "2023")
+    declaration.refresh_from_db()
+    assert os.path.exists(declaration.raw.file.path)
+    assert declaration.ocr_text == "zostaje"
+    assert any("OSW101_001" in url for _, url in fetch_env.requests)
+
+
+def test_latest_keeps_only_the_newest_year(fetch_env):
+    call_command("sync_declarations", "--fetch", "--latest", "--mp", "1")
+    years = set(AssetDeclaration.objects.filter(mp__sejm_id=1).values_list("year", flat=True))
+    assert years == {2023}
+
+
+def test_incapsula_script_on_the_real_card_is_not_a_block(fetch_env):
+    client = SejmSiteClient(session=fetch_env, delay=0)
+    card = client.declarations(1)
+    assert card.refs
+    posted = fetch_env.requests
+    assert ("POST", "https://www.sejm.gov.pl/sejm10.nsf/posel.xsp?id=001&type=A") in posted
+
+
+def test_anti_bot_page_stops_instead_of_walking_every_mp(fetch_env, monkeypatch):
+    from apps.assets.sources import DeclarationSourceError, SejmSiteClient
+
+    gets = []
+
+    class Challenge:
+        def get(self, url, timeout=30, **kwargs):
+            gets.append(url)
+            return type("R", (), {
+                "status_code": 200,
+                "text": '<html><script>window["bobcmn"] = "1"</script></html>',
+            })()
+
+        def post(self, url, data=None, **kwargs):
+            raise AssertionError("should not post after an anti-bot page")
+
+    client = SejmSiteClient(session=Challenge(), delay=0)
+    with pytest.raises(DeclarationSourceError, match="anti-bot"):
+        client.declarations(1)
+    gets.clear()
+    monkeypatch.setattr(
+        "apps.assets.management.commands.sync_declarations.new_session", lambda: Challenge()
+    )
+    with pytest.raises(CommandError, match="anti-bot"):
+        call_command("sync_declarations", "--fetch", "--latest", "--limit", "2")
+    assert len(gets) == 1
 
 
 def test_fetch_filters_mp_year_and_limit(fetch_env):

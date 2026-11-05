@@ -18,14 +18,7 @@ dependencies = [
 
 [project.optional-dependencies]
 ocr = [
-    "paddleocr>=3.0",
-    "paddlepaddle>=3.0",
-]
-# CUDA 12.9 wheel for Linux x86_64 / Python 3.12, including Blackwell (RTX 50, sm_120).
-# Do not install together with the "ocr" extra; both ship the "paddle" module.
-ocr-gpu = [
-    "paddleocr>=3.0",
-    "paddlepaddle-gpu @ https://paddle-whl.cdn.bcebos.com/stable/cu129/paddlepaddle-gpu/paddlepaddle_gpu-3.3.1-cp312-cp312-linux_x86_64.whl ; python_version == '3.12' and sys_platform == 'linux' and platform_machine == 'x86_64'",
+    "chandra-ocr[hf]>=0.2",
 ]
 
 [dependency-groups]
@@ -36,14 +29,11 @@ dev = [
 
 [tool.uv]
 package = false
-conflicts = [
-    [
-        { extra = "ocr" },
-        { extra = "ocr-gpu" },
-    ],
-]
 
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "config.settings"
 testpaths = ["tests"]
 python_files = ["test_*.py"]
+markers = [
+    "ocr: needs the Chandra extra; omitted from GitHub CI",
+]

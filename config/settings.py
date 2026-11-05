@@ -108,21 +108,25 @@ SEJM_API_URL = env("SEJM_API_URL", default="https://api.sejm.gov.pl/sejm")
 SEJM_TERM = env.int("SEJM_TERM", default=10)
 SEJM_HTTP_WORKERS = env.int("SEJM_HTTP_WORKERS", default=8)
 
-# Asset declarations: "mock" needs no keys, "ocr_llm" = PaddleOCR plus any LLM.
+# Asset declarations: "mock" needs no keys, "ocr_llm" = Chandra plus any LLM.
 ASSET_EXTRACTOR = env("ASSET_EXTRACTOR", default="mock")
 ASSET_REVIEW_THRESHOLD = env.float("ASSET_REVIEW_THRESHOLD", default=0.7)
 # Pause (seconds) between requests to sejm.gov.pl and ORKA during sync_declarations --fetch.
 DECLARATION_FETCH_DELAY = env.float("DECLARATION_FETCH_DELAY", default=0.5)
 
-# OCR (PaddleOCR, lokalnie). Wymaga: uv sync --extra ocr
-OCR_ENGINE = env("OCR_ENGINE", default="paddle")
-OCR_LANG = env("OCR_LANG", default="pl")
-OCR_DEVICE = env("OCR_DEVICE", default="cpu")
+# Chandra is optional and local. The paid path is the Datalab convert API.
+OCR_ENGINE = env("OCR_ENGINE", default="datalab")
+OCR_DEVICE = env("OCR_DEVICE", default="gpu")
 OCR_RENDER_SCALE = env.float("OCR_RENDER_SCALE", default=1.6)
 OCR_MIN_LINE_CONFIDENCE = env.float("OCR_MIN_LINE_CONFIDENCE", default=0.45)
 OCR_MAX_PAGES = env.int("OCR_MAX_PAGES", default=20)
-OCR_DET_MODEL = env("OCR_DET_MODEL", default="")
-OCR_REC_MODEL = env("OCR_REC_MODEL", default="")
+
+DATALAB_API_KEY = env("DATALAB_API_KEY", default="")
+DATALAB_API_URL = env("DATALAB_API_URL", default="https://www.datalab.to")
+# lite | fast | balanced | accurate. Scanned declarations want accurate.
+DATALAB_MODE = env("DATALAB_MODE", default="accurate")
+# Optional Cookie header from a browser that opened an MP page on sejm.gov.pl.
+SEJM_COOKIE = env("SEJM_COOKIE", default="")
 
 # LLM: dowolny dostawca z API zgodnym z OpenAI (/chat/completions).
 LLM_PROVIDER = env("LLM_PROVIDER", default="openai")

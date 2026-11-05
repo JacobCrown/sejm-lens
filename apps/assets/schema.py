@@ -268,3 +268,22 @@ class DeclarationData(Base):
 
 def json_schema() -> dict:
     return DeclarationData.model_json_schema()
+
+
+def strict_json_schema() -> dict:
+    """Schema accepted by providers that constrain decoding (`strict: true`)."""
+    return _strictify(json_schema())
+
+
+def _strictify(node):
+    if isinstance(node, list):
+        return [_strictify(item) for item in node]
+    if not isinstance(node, dict):
+        return node
+    if "$ref" in node:
+        return {"$ref": node["$ref"]}
+    out = {key: _strictify(value) for key, value in node.items()}
+    if "properties" in out:
+        out["additionalProperties"] = False
+        out["required"] = list(out["properties"])
+    return out

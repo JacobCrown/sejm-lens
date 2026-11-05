@@ -193,18 +193,24 @@ def club_list(request):
 
 def club_detail(request, code: str):
     club = get_object_or_404(Club, term_id=settings.SEJM_TERM, code=code)
-    members = club.members.filter(active=True).order_by("last_name")
+    members = Paginator(
+        club.members.filter(active=True).order_by("last_name", "first_name", "pk"),
+        20,
+    ).get_page(request.GET.get("page"))
     recent = (
         club.voting_stats.select_related("voting", "voting__sitting")
         .order_by("-voting__date", "-voting__number")[:15]
     )
     term = _term()
     cohesion = stats.club_cohesion(term).get(club.id, {}) if term else {}
-    return render(request, "clubs/detail.html", {
+    ctx = {
         "club": club,
         "members": members,
+        "member_count": members.paginator.count,
         "recent": recent,
         "agreement": stats.club_agreement(club),
         "cohesion": cohesion.get("cohesion"),
         "cohesion_votings": cohesion.get("votings", 0),
-    })
+    }
+    template = "clubs/_members.html" if _is_htmx(request) else "clubs/detail.html"
+    return render(request, template, ctx)

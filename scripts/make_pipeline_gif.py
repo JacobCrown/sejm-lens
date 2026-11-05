@@ -1,4 +1,4 @@
-"""Generates docs/media/pipeline.gif: scan -> PaddleOCR -> LLM -> structured data -> profile.
+"""Generates docs/media/pipeline.gif: scan -> Chandra -> LLM -> structured data -> profile.
 
 Every number and line on the animation comes from a real extraction stored in the database
 (OCR text, model response, verification report, cost), so nothing is invented for the picture.
@@ -36,7 +36,7 @@ AMBER = (251, 191, 36)
 PINK = (244, 114, 182)
 RED = (248, 113, 113)
 
-STAGES = ["1  Scan (PDF)", "2  PaddleOCR (local)", "3  LLM", "4  Verify + compute"]
+STAGES = ["1  Scan (PDF)", "2  Chandra (local GPU)", "3  LLM", "4  Verify + compute"]
 FONT_DIRS = ["/usr/share/fonts/truetype/dejavu", "/Library/Fonts", "/System/Library/Fonts/Supplemental"]
 
 
@@ -257,7 +257,7 @@ def scene_scan(sample, scan):
         d.text((492, 180), "orka.sejm.gov.pl · PDF, image only", font=F_BODY, fill=MUTED)
         d.text((492, 206), "no text layer to copy from", font=F_BODY, fill=MUTED)
         if i >= 3:
-            d.text((492, 280), "PaddleOCR reads the page", font=F_TITLE, fill=ACCENT)
+            d.text((492, 280), "Chandra reads the page", font=F_TITLE, fill=ACCENT)
             d.text((492, 312), "local CPU, no data leaves the machine", font=F_BODY, fill=MUTED)
             d.rounded_rectangle((492, 360, 892, 378), 8, outline=PANEL_EDGE)
             d.rounded_rectangle((492, 360, 492 + int(400 * (i - 2) / 5), 378), 8, fill=ACCENT)

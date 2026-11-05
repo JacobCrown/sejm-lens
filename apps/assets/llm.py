@@ -141,7 +141,7 @@ class LLMClient:
             elif self.response_format == "json_schema" and schema:
                 body["response_format"] = {
                     "type": "json_schema",
-                    "json_schema": {"name": "declaration", "schema": schema, "strict": False},
+                    "json_schema": {"name": "declaration", "schema": schema, "strict": True},
                 }
         # OpenRouter reports the call cost in USD only when asked.
         if "openrouter.ai" in self.url and "usage" not in drop and "usage" not in body:

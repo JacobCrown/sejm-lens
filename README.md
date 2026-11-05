@@ -17,7 +17,7 @@ Sejm Watch is an open-source web app that pulls public data about the Polish Sej
 - **Clubs**: voting cohesion and which clubs vote alike most often.
 - **Asset declarations**: assets, income and liabilities converted to PLN, shown as tiles, a structure chart, a year-over-year chart and short plain-language insights.
 - **Automatic download of declarations** from the Sejm website for every MP (`sync_declarations --fetch`).
-- **OCR + LLM extraction with verification**: scans are read locally, a model of your choice structures them, and a deterministic checker compares every number with the OCR text.
+- **OCR + LLM extraction with verification**: scans are read by the Datalab convert API, a model of your choice structures the stored text, and a deterministic checker compares every number with that text.
 - **Cost transparency**: every extraction stores the model, tokens and the price of the model calls, and the MP profile shows how much it cost to compute the data.
 - **Pluggable everywhere**: any OpenAI-compatible LLM API (OpenAI, OpenRouter, Groq, Together, Mistral, DeepSeek, or local Ollama, LM Studio, vLLM), and a simple protocol for writing your own extractor.
 
@@ -29,7 +29,7 @@ Sejm Watch is an open-source web app that pulls public data about the Polish Sej
 | Frontend | Django templates, HTMX, Tailwind CSS (CDN), Apache ECharts |
 | Parliament data | Official [Sejm API](https://api.sejm.gov.pl), `httpx` |
 | Declaration download | `curl_cffi` (Chrome TLS fingerprint, no browser needed) |
-| OCR | [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR) (PP-OCR models, runs locally), `pypdfium2` for rendering PDFs |
+| OCR | [Datalab](https://documentation.datalab.to) convert API (`accurate`). Optional local preview: [Chandra](https://github.com/datalab-to/chandra) (`uv sync --extra ocr`) |
 | Structuring | Any OpenAI-compatible `/chat/completions` API, `pydantic` schema |
 | Currency | NBP exchange rates (with an offline fallback table) |
 | Tooling | `uv`, `pytest` + `pytest-django`, Docker Compose |
@@ -66,12 +66,9 @@ The official declarations are **scans with no text layer**, often handwritten or
 
 ```mermaid
 flowchart LR
-  PDF --> Text{"Text layer?"}
-  Text -->|yes| Plain[Text from PDF]
-  Text -->|no| OCR["PaddleOCR (local)"]
-  OCR --> Rows[Lines grouped into rows]
-  Plain --> LLM
-  Rows --> LLM["LLM: JSON following a schema"]
+  PDF --> Datalab["Datalab convert API"]
+  Datalab --> Stored["ocr_text stored on the declaration"]
+  Stored --> LLM["LLM: JSON following a schema"]
   LLM --> Schema{"Schema validation"}
   Schema -->|errors| LLM
   Schema -->|ok| Verify{"Check against the OCR text"}
@@ -80,7 +77,13 @@ flowchart LR
   Items --> Totals["Currency conversion and totals in code"]
 ```
 
-**1. OCR (`apps/assets/ocr/`).** PaddleOCR runs on your machine, so the scan itself never leaves it. On CPU this takes around 20 seconds per page (a typical declaration has 5-6 pages). The text is stored in `AssetDeclaration.ocr_text`, so changing the model or the prompt does not require running OCR again. If the PDF has a text layer, OCR is skipped.
+**1. OCR, then the model.** Scans are read by the [Datalab convert API](https://documentation.datalab.to/docs/recipes/conversion/conversion-api-overview) (`mode=accurate`, exact transcription, markdown). `manage.py ocr_declarations` stores that markdown on the declaration row for that MP, year and kind (`ocr_text`, plus the cost and the response in `ocr_response`). A row that already has text is skipped, so the paid call is not repeated. `manage.py extract_declarations` only sends the stored text to your LLM. It does not call Datalab.
+
+The picture is one page of a public filing (Andrzej Adamczyk). Left: the scan and the regions that were read. Right: the text kept for the model.
+
+![A public declaration page and the text read from it](docs/media/chandra-preview.png)
+
+`uv run python scripts/preview_ocr.py file.pdf --out /tmp/ocr-preview` draws the same kind of page locally with Chandra. It does not call Datalab and does not write to the database. Chandra needs `uv sync --extra ocr`.
 
 **2. Transcription by the model (`apps/assets/extractors/ocr_llm.py`).** The model receives the OCR text, a prompt describing the sections I-XI of the official form and a JSON Schema (`apps/assets/schema.py`). Its rules: copy only what is in the text, do not sum, do not convert currencies, do not round, do not guess digits, and attach a verbatim `quote` from the OCR text to every entry. It returns one JSON object. The full answer is kept in `AssetDeclaration.structured`.
 
@@ -98,7 +101,7 @@ flowchart LR
 
 Polish number formats are understood (`570 000,00`, `499.000`, `107728PLN`, `1,2 MLN`).
 
-**Repair loop.** Schema errors and fixable verification errors are sent back to the model as a concrete list of problems, up to `LLM_MAX_REPAIRS` times, and the best answer is kept. Errors the model cannot fix (for example a wrong file) are not retried.
+**Repair loop.** Schema errors and fixable verification errors are sent back to the model as a concrete list of problems, up to `LLM_MAX_REPAIRS` times, and the best answer is kept. If a later call comes back empty, that earlier answer is still kept. Errors the model cannot fix (for example a wrong file, or a year printed on the scan that is not the filing year) are not retried.
 
 **4. Calculation in code (`apps/assets/services/`).**
 - Foreign-currency items are converted to PLN with the NBP rate from 31 December of the declaration year (this is the date the declaration describes). An offline table is used, and flagged, when NBP is unreachable.
@@ -110,7 +113,7 @@ Polish number formats are understood (`570 000,00`, `499.000`, `107728PLN`, `1,2
 
 ### What it costs
 
-OCR is local and free. Only the model call costs money, and the app records it for every run. With OpenRouter the price is read straight from the response (`usage.cost`); other providers return tokens only, which are stored and shown, and the amount is left empty rather than guessed. On an MP profile, under "Asset declarations", you see the total cost of computing the displayed data and the model that was used; the admin shows every run.
+Datalab bills each OCR call. That amount is stored on the declaration as `ocr_cost_usd`. The model call is a separate cost, recorded on every extraction run. With OpenRouter the price is read straight from the response (`usage.cost`); other providers return tokens only, which are stored and shown, and the amount is left empty rather than guessed. On an MP profile, under "Asset declarations", you see the model cost and, when Datalab reported it, the OCR cost. The admin shows every run.
 
 Measured with `deepseek/deepseek-v4.1-flash-1017` on real scans: about **0.004 USD** for a short declaration, **0.007 USD** for a typical annual one, and **0.014 USD** for a long one with many plots of land that needed two repair rounds (3 model calls). Prices depend on the model and the provider.
 
@@ -155,16 +158,18 @@ Open <http://localhost:8642>. The admin is at `/admin/` (create an account with 
 ### Real declarations
 
 ```bash
-uv sync --extra ocr                                          # PaddleOCR and PaddlePaddle (CPU)
-uv sync --extra ocr-gpu                                      # PaddlePaddle GPU, CUDA 12.9, Linux x86_64, Python 3.12
-# in .env: ASSET_EXTRACTOR=ocr_llm and the LLM_* settings below
-uv run python manage.py check_llm                            # one tiny request to verify the provider
+# in .env: DATALAB_API_KEY, ASSET_EXTRACTOR=ocr_llm and the LLM_* settings below
+uv run python manage.py check_llm                            # one tiny request to verify the LLM
 uv run python manage.py sync_sejm --skip-votings             # MPs first
-uv run python manage.py sync_declarations --fetch --limit 5  # download PDFs for the first 5 MPs
-uv run python manage.py extract_declarations --mp 1          # OCR + LLM for one MP
+uv run python manage.py sync_declarations --fetch --limit 10 --year 2025
+# everyone, newest year only: --fetch --latest
+uv run python manage.py ocr_declarations --limit 10 --year 2025
+# several years: --year 2025 2026
+uv run python manage.py extract_declarations --limit 5 --year 2025
+# several years: --year 2025 2026
 ```
 
-The Docker image does not include PaddleOCR (the `--extra ocr` variant has not been tested in a container), so run extraction locally.
+`ocr_declarations` skips a declaration that already has OCR text. `--force` pays for a new read. The Docker image does not call Datalab. Run these commands on the host. `docker compose up` always points the web container at the Postgres service in Compose, even if `.env` contains another `DATABASE_URL`. Commands you run with `uv run python manage.py ...` use `DATABASE_URL` from `.env`, so a Neon connection string there writes straight into that database.
 
 ## Commands
 
@@ -172,13 +177,18 @@ The Docker image does not include PaddleOCR (the `--extra ocr` variant has not b
 | --- | --- |
 | `sync_sejm [--sittings N \| --sitting X \| --all] [--skip-votings] [--force]` | Fetches the term, clubs, MPs, sittings and votings, then recomputes aggregates. Unchanged votings are skipped. |
 | `recompute_stats` | Recomputes club results, attendance and loyalty without fetching. |
-| `sync_declarations --fetch [--mp ID] [--year Y] [--limit N] [--force] [--extract]` | Finds and downloads MPs' declarations from the Sejm website. Files already stored are skipped, `--force` downloads them again. |
+| `sync_declarations --fetch [--mp ID] [--year Y] [--latest] [--limit N] [--force] [--extract]` | Downloads declarations. `--year` keeps one year. `--latest` keeps the newest year on each MP's page (both kinds, when that year has two). `--limit` is the first N MPs by id. A row whose PDF is gone from disk is downloaded again. |
 | `sync_declarations --mp ID --year Y (--file PDF \| --url URL) [--extract]` | Imports one PDF and optionally analyses it right away. |
 | `sync_declarations --manifest file.csv [--extract]` | Imports many at once. The CSV has the columns `mp_id,year,kind,url,file`. |
-| `extract_declarations [--extractor mock\|ocr_llm] [--mp ID] [--all] [--review] [--retry-failed] [--reocr]` | Analyses pending declarations. `--review` retries those needing review, `--reocr` forces fresh OCR instead of the stored text. |
+| `ocr_declarations [--mp ID] [--year Y ...] [--limit N] [--force]` | Sends stored PDFs to Datalab. `--limit` is how many MPs (lowest id first). `--year 2025` or `--year 2025 2026` keeps only those years. Skips text already stored, and skips a row whose PDF is missing from disk. |
+| `clear_ocr [--mp ID] [--year Y ...] [--limit N] [--yes]` | Deletes stored OCR text. The declaration row, the PDF and the LLM result stay. Without `--yes` it only prints the count. |
+| `clear_declarations [--mp ID] [--year Y ...] [--limit N] [--missing] [--yes]` | Deletes real declaration rows and the PDF. Demo rows stay. `--missing` deletes only rows whose file is gone. Without `--yes` it only prints the count. |
+| `clear_extractions [--mp ID] [--year Y ...] [--limit N] [--yes]` | Deletes a real LLM result and sets that declaration back to pending. Demo rows (`is_demo`) and stored OCR text stay. |
+| `extract_declarations [--extractor mock\|ocr_llm] [--mp ID] [--year Y ...] [--limit N] [--all] [--review] [--retry-failed] [--reocr]` | Sends the stored OCR text to the LLM. `--limit` is how many MPs. `--year` works like `ocr_declarations`. It does not call Datalab. |
 | `analyze_pdf file.pdf [--name "First Last"] [--year Y] [--json] [--ocr-only] [--ocr-text file.txt] [--save-ocr file.txt]` | Processes any PDF without touching the database. The quickest way to try your own model. |
 | `check_llm` | Verifies the LLM provider from `.env` with one short request. |
 | `seed_demo_declarations [--years 2023 2024 2025] [--limit N]` | Generates demo data for MPs without real declarations. |
+| `fetch_mp_photos [--term N] [--workers N] [--force]` | Downloads MP portraits into `static/portraits/`. Files already there are skipped. Commit that directory so production does not hotlink `api.sejm.gov.pl`. |
 
 A full term sync (`--all`) is more than 5,000 votings with 460 votes each. It takes a few minutes, and later runs only fetch changes. Run `sync_sejm` from cron in production, for example hourly on sitting days.
 
@@ -194,7 +204,7 @@ The official API has no declarations. The list is on each MP's page on sejm.gov.
 
 A row is skipped with a warning (and counted in `skipped_rows`) when it has no scan link, an invalid date, a link outside sejm.gov.pl, a file that belongs to another MP, or an unknown label. When there are two files for the same year and kind, the later one wins. The scan URL contains a unique document id, so later runs do not download files that are already stored, and a corrected scan is downloaded again. Requests are spaced by `DECLARATION_FETCH_DELAY` and an error for one MP does not stop the rest. A full term is a few hundred pages and about two thousand PDFs, so the first run takes tens of minutes.
 
-If the Sejm changes the page layout, the command reports `brak sekcji oświadczeń` for the MP page; manual import (`--file`, `--url`, `--manifest`) keeps working.
+If the Sejm changes the page layout, the command reports that the MP page has no declarations section. Manual import (`--file`, `--url`, `--manifest`) keeps working. An anti-bot interstitial stops the command on the first MP instead of requesting every one.
 
 ## Configuring the LLM
 
@@ -215,7 +225,7 @@ LLM_MODEL=qwen2.5:14b
 LLM_EXTRA_BODY={"options": {"num_ctx": 16384}}   # the prompt with schema and text is about 8k tokens, the answer up to 6k
 ```
 
-If the provider rejects a parameter (for example `temperature` for reasoning models, or `response_format`), the client retries without it and `check_llm` reports it. Use a generous `LLM_TIMEOUT` (at least 180 s): a full answer for a long declaration does not fit in 30 s.
+If the provider rejects a parameter (for example `temperature` for reasoning models, or `response_format`), the client retries without it and `check_llm` reports it. `LLM_RESPONSE_FORMAT=json_schema` asks the provider to emit only `DeclarationData` (`strict: true`). That fixes the shape of the JSON. It does not check that a quoted amount is really on the scan; `verification.py` still does that. Use a generous `LLM_TIMEOUT` (at least 180 s): a full answer for a long declaration does not fit in 30 s.
 
 ## Configuration reference (`.env`)
 
@@ -227,9 +237,9 @@ If the provider rejects a parameter (for example `temperature` for reasoning mod
 | `DECLARATION_FETCH_DELAY` | `0.5` | Pause (seconds) between requests to sejm.gov.pl and ORKA during `sync_declarations --fetch` |
 | `ASSET_EXTRACTOR` | `mock` | `mock` or `ocr_llm` |
 | `ASSET_REVIEW_THRESHOLD` | `0.7` | Below this confidence a declaration needs review |
-| `OCR_ENGINE` / `OCR_LANG` / `OCR_DEVICE` / `OCR_RENDER_SCALE` | `paddle` / `pl` / `cpu` / `1.6` | PaddleOCR settings. A higher scale is more accurate but slower. For a GPU install `uv sync --extra ocr-gpu` (CUDA 12.9) and set `OCR_DEVICE=gpu` |
+| `OCR_ENGINE` / `DATALAB_API_KEY` / `DATALAB_MODE` | `datalab` / empty / `accurate` | `ocr_declarations` calls the Datalab convert API. `accurate` is for scans. The result is stored on the declaration. |
 | `LLM_PROVIDER` / `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL` | `openai` / empty / empty / `gpt-4o-mini` | OpenAI-compatible LLM provider |
-| `LLM_TEMPERATURE` / `LLM_MAX_TOKENS` / `LLM_RESPONSE_FORMAT` / `LLM_TIMEOUT` | `0` / empty / `json_object` / `180` | Request parameters (`json_object`, `json_schema` or `none` for providers without a JSON mode) |
+| `LLM_TEMPERATURE` / `LLM_MAX_TOKENS` / `LLM_RESPONSE_FORMAT` / `LLM_TIMEOUT` | `0` / empty / `json_schema` / `180` | `json_schema` sends `DeclarationData` with `strict: true`, so the provider can only return that shape. `json_object` only requires some JSON object. `none` sends no format. |
 | `LLM_EXTRA_HEADERS` / `LLM_EXTRA_BODY` | `{}` | Extra headers and request fields (JSON) |
 | `LLM_MAX_REPAIRS` | `2` | How many times the model may fix its answer after errors |
 
@@ -239,7 +249,7 @@ If the provider rejects a parameter (for example `temperature` for reasoning mod
 uv run pytest
 ```
 
-Tests use `httpx.MockTransport` instead of the real Sejm API and LLM provider, and a fake session instead of sejm.gov.pl, with fallback currency rates instead of NBP, so they need neither network nor keys. They only need the PostgreSQL from `DATABASE_URL` because pytest-django creates a test database. The test document (`tests/synthetic.py`) is synthetic but has the same structure and traps as real scans. A slow test with real PaddleOCR runs with `RUN_OCR_TESTS=1 uv run pytest tests/test_ocr_llm.py`.
+Tests use `httpx.MockTransport` instead of the real Sejm API and LLM provider, and a fake session instead of sejm.gov.pl, with fallback currency rates instead of NBP, so they need neither network nor keys. They only need the PostgreSQL from `DATABASE_URL` because pytest-django creates a test database. The test document (`tests/synthetic.py`) is synthetic but has the same structure and traps as real scans. A slow test that loads Chandra runs with `RUN_OCR_TESTS=1 uv run pytest tests/test_ocr_llm.py`.
 
 To regenerate the animation at the top of this file: `uv run python scripts/make_pipeline_gif.py` (from the committed sample), or `--from-db --mp ID --year Y` to rebuild it from a stored real extraction.
 
@@ -252,10 +262,34 @@ apps/parliament/      Sejm models, API client, sync, aggregates, hemicycle, view
 apps/assets/          declarations: models, schema.py (model answer), verification.py, llm.py,
                       ocr/, extractors, sources.py (download from the Sejm site), currency, summaries, commands
 templates/            Django templates + Tailwind (CDN) + HTMX + ECharts
-scripts/              make_pipeline_gif.py
+scripts/              make_pipeline_gif.py, preview_ocr.py, seed_neon.sh
 docs/media/           README images
 tests/                pytest-django
 ```
+
+## Deploy
+
+Render builds the `prod` branch (`render.yaml`: Docker, free web service in Frankfurt). A push to `prod` redeploys. `collectstatic` runs while the image is built, so portraits committed under `static/portraits/` are served by WhiteNoise. A missing file falls back to `api.sejm.gov.pl`, which is what makes the MP list slow.
+
+```bash
+uv run python manage.py fetch_mp_photos
+git push origin prod
+```
+
+Leave `ASSET_EXTRACTOR=mock` on Render. Do not put `DATALAB_API_KEY` or `LLM_API_KEY` there. OCR and extraction stay on your machine. The service uses the Neon `DATABASE_URL` from the Render dashboard. `docker compose up` ignores `.env` for the database and always uses the Compose Postgres. `uv run python manage.py ...` uses `DATABASE_URL` from `.env`, so a Neon string there writes straight into production.
+
+### Replacing the Neon database
+
+`scripts/seed_neon.sh` copies the Compose database (`localhost:5432` / `sejmwatch`, the default in `.env`) into Neon and replaces what is there. Use Neon's direct connection string with `sslmode=require`, not the pooled one. Accounts, sessions and the admin log are left behind. PDF bytes stay in local `media/`; Neon gets the rows, the OCR text and the extraction. With `DEBUG=false` the profile links to the Sejm PDF.
+
+Run it after local `migrate`, so the dump has the current schema. Render runs `migrate` again on boot.
+
+```bash
+NEON_DATABASE_URL='postgres://USER:PASS@HOST/neondb?sslmode=require' scripts/seed_neon.sh
+DATABASE_URL='postgres://USER:PASS@HOST/neondb?sslmode=require' uv run python manage.py createsuperuser
+```
+
+The script asks you to type `yes` before it writes anything.
 
 ## Roadmap
 

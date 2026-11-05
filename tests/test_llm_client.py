@@ -108,7 +108,9 @@ def test_json_schema_response_format():
 
     client(handler, response_format="json_schema").chat([], schema={"type": "object"})
     rf = seen["body"]["response_format"]
-    assert rf["type"] == "json_schema" and rf["json_schema"]["schema"] == {"type": "object"}
+    assert rf["type"] == "json_schema"
+    assert rf["json_schema"]["strict"] is True
+    assert rf["json_schema"]["schema"] == {"type": "object"}
 
 
 def test_unsupported_params_are_dropped_and_reported():

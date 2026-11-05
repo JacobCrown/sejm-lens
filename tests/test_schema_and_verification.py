@@ -47,7 +47,23 @@ def test_currency_aliases_and_errors():
         Money(amount="1", currency="euros-ish")
 
 
-def test_good_payload_is_valid_and_coerces():
+def test_strict_schema_closes_every_object():
+    from apps.assets.schema import strict_json_schema
+
+    def walk(node):
+        if isinstance(node, list):
+            for item in node:
+                walk(item)
+            return
+        if not isinstance(node, dict):
+            return
+        if "properties" in node:
+            assert node["additionalProperties"] is False
+            assert set(node["required"]) == set(node["properties"])
+        for value in node.values():
+            walk(value)
+
+    walk(strict_json_schema())
     data = DeclarationData.model_validate(good_payload())
     assert data.declarant.birth_date.isoformat() == "1970-02-01"
     assert data.meta.declaration_date.isoformat() == "2024-07-15"

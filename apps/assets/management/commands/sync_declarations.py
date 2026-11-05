@@ -28,11 +28,18 @@ class Command(BaseCommand):
             "--fetch", action="store_true",
             help="Find and download MPs' declarations from sejm.gov.pl (limit with --mp, --year, --limit)",
         )
-        parser.add_argument("--limit", type=int, help="With --fetch: only this many MPs, lowest id first")
+        parser.add_argument(
+            "--limit", type=int,
+            help="With --fetch: the first this many MPs, lowest id first",
+        )
         parser.add_argument("--force", action="store_true", help="With --fetch: download files that are already stored")
         parser.add_argument("--manifest", help="CSV: mp_id,year,kind,url,file")
         parser.add_argument("--mp", type=int, help="MP id from the Sejm API")
-        parser.add_argument("--year", type=int)
+        parser.add_argument("--year", type=int, help="Only this declaration year")
+        parser.add_argument(
+            "--latest", action="store_true",
+            help="With --fetch: only the newest year on each MP's page",
+        )
         parser.add_argument("--kind", default="ANNUAL", choices=[k for k, _ in AssetDeclaration.Kind.choices])
         parser.add_argument("--url")
         parser.add_argument("--file")
@@ -60,6 +67,8 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(f"Done: {run.stats}"))
 
     def handle_fetch(self, opts, extractor):
+        if opts["latest"] and opts["year"]:
+            raise CommandError("--latest cannot be combined with --year")
         mps = MP.objects.filter(term_id=settings.SEJM_TERM).order_by("sejm_id")
         if opts["mp"]:
             mps = mps.filter(sejm_id=opts["mp"])
@@ -77,21 +86,33 @@ class Command(BaseCommand):
                 try:
                     card = client.declarations(sejm_id)
                 except DeclarationSourceError as exc:
+                    if "anti-bot" in str(exc):
+                        raise CommandError(str(exc)) from exc
                     run.stats["errors"] += 1
                     self.stderr.write(self.style.WARNING(f"MP {sejm_id}: {exc}"))
                     continue
+                refs = self.refs_for(card.refs, opts)
                 run.stats["cards"] += 1
                 run.stats["skipped_rows"] += len(card.skipped)
                 for reason in card.skipped:
                     self.stderr.write(self.style.WARNING(f"MP {sejm_id}, skipped row: {reason}"))
-                for ref in card.refs:
-                    if opts["year"] and ref.year != opts["year"]:
-                        continue
+                for ref in refs:
                     existing = None if opts["force"] else find_imported(ref)
                     if existing is None:
                         client.pause()
                     self.import_ref(ref, run, extractor, session=session, existing=existing)
         self.stdout.write(self.style.SUCCESS(f"Done: {run.stats}"))
+
+    @staticmethod
+    def refs_for(refs, opts):
+        if opts["latest"]:
+            if not refs:
+                return []
+            newest = max(ref.year for ref in refs)
+            return [ref for ref in refs if ref.year == newest]
+        if opts["year"]:
+            return [ref for ref in refs if ref.year == opts["year"]]
+        return list(refs)
 
     def import_ref(self, ref, run, extractor, session=None, existing=None):
         if existing is not None:
@@ -104,7 +125,9 @@ class Command(BaseCommand):
                 self.stderr.write(self.style.WARNING(str(exc)))
                 return
         run.stats["imported" if changed else "unchanged"] += 1
-        self.stdout.write(f"{'Imported' if changed else 'Unchanged'}: {declaration}")
+        self.stdout.write(
+            f"{'Imported' if changed else 'Unchanged'}: {declaration.mp.sejm_id:03d} {declaration}"
+        )
         if extractor and (changed or declaration.status == AssetDeclaration.Status.PENDING):
             result = run_extraction(declaration, extractor)
             declaration.refresh_from_db()

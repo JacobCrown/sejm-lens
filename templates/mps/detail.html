@@ -67,7 +67,7 @@
         {% else %}brak danych{% endif %}
         {% if processing_cost.models %}· model: <span class="font-mono">{{ processing_cost.models|join:", " }}</span>{% endif %}
         {% if processing_cost.total_usd is not None and processing_cost.unpriced %}· dla {{ processing_cost.unpriced }} z {{ processing_cost.declarations }} oświadczeń brak danych o koszcie{% endif %}
-        · OCR lokalnie, bez opłaty.
+        · OCR idzie przez Datalab i jest zapisany przy każdym oświadczeniu.
       </p>
       {% endif %}
     </div>
@@ -161,7 +161,7 @@
     <p class="mt-6 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
       <span>Oświadczenie: {{ s.declaration.get_kind_display|lower }}, stan za {{ s.year }} r.</span>
       <span>· Analiza: {% if s.declaration.is_demo %}dane demonstracyjne (MockExtractor){% elif s.declaration.extractor == "ocr_llm" %}OCR ({{ s.declaration.ocr_engine }}) + model językowy{% else %}{{ s.declaration.extractor|default:"-" }}{% endif %}{% if s.declaration.confidence is not None %} (pewność {{ s.declaration.confidence|ratio_pct:0 }}){% endif %}</span>
-      {% with run=s.declaration.latest_successful_run %}{% if run and run.usage_summary %}<span>· Koszt modelu: {{ run.usage_summary }}. OCR liczony lokalnie, bez opłaty.</span>{% endif %}{% endwith %}
+      {% with run=s.declaration.latest_successful_run %}{% if run and run.usage_summary %}<span>· Koszt modelu: {{ run.usage_summary }}.{% if s.declaration.ocr_engine == "datalab" %} OCR: Datalab{% if s.declaration.ocr_cost_usd %} ({{ s.declaration.ocr_cost_usd }} USD){% endif %}.{% endif %}</span>{% endif %}{% endwith %}
       {% if s.declaration.pdf_url %}<a href="{{ s.declaration.pdf_url }}" target="_blank" rel="noopener" class="font-medium text-red-700 hover:underline">Źródłowy PDF ↗</a>{% endif %}
     </p>
   </div>

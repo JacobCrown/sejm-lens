@@ -1,4 +1,4 @@
-"""Extractor: local OCR (PaddleOCR) -> any LLM -> verification -> declaration items.
+"""Extractor: local OCR (Chandra) -> any LLM -> verification -> declaration items.
 
 Flow:
 1. PDF -> text (the text layer, or OCR; the OCR result is cached in the database).
@@ -19,7 +19,7 @@ from ..llm import LLMClient, LLMError, extract_json
 from ..mapping import to_items
 from ..ocr import OCRError, ocr_pdf
 from ..prompts import PROMPT_VERSION, schema_feedback, system_prompt, user_prompt, verification_feedback
-from ..schema import DeclarationData, json_schema
+from ..schema import DeclarationData, strict_json_schema
 from ..verification import VerificationReport, verify
 from .base import DeclarationContext, ExtractedDeclaration, ExtractorError
 
@@ -62,6 +62,11 @@ class OcrLlmExtractor:
         """Returns (text, engine, OCR confidence). Uses the cached text from the context when present."""
         if context and context.cached_ocr_text:
             return context.cached_ocr_text, context.cached_ocr_engine, context.cached_ocr_confidence
+        if self._ocr_engine is None:
+            raise ExtractorError(
+                "No stored OCR for this declaration. "
+                "Run manage.py ocr_declarations first; extraction does not call Datalab."
+            )
         if not pdf_bytes:
             raise ExtractorError("The ocr_llm extractor requires the declaration PDF.")
         try:
@@ -81,7 +86,7 @@ class OcrLlmExtractor:
             {"role": "system", "content": system_prompt()},
             {"role": "user", "content": user_prompt(ocr_text, mp_name, year)},
         ]
-        schema = json_schema() if settings.LLM_RESPONSE_FORMAT == "json_schema" else None
+        schema = strict_json_schema() if settings.LLM_RESPONSE_FORMAT == "json_schema" else None
         best: Attempt | None = None
         model = self.llm.model
         schema_failure = ""
@@ -93,7 +98,10 @@ class OcrLlmExtractor:
             try:
                 response = self.llm.chat(messages, schema)
             except LLMError as exc:
-                raise ExtractorError(str(exc)) from exc
+                if best is None:
+                    raise ExtractorError(str(exc)) from exc
+                logger.warning("LLM, attempt %s: %s. Keeping the earlier answer.", attempt + 1, exc)
+                break
             model = response.model
             llm_calls += 1
             if response.prompt_tokens is not None:
@@ -122,7 +130,12 @@ class OcrLlmExtractor:
                 best = current
             if not report.fixable_errors:
                 break
-            logger.info("LLM, attempt %s: %s verification errors, asking for a fix", attempt + 1, len(report.errors))
+            logger.info(
+                "LLM, attempt %s: %s verification errors, asking for a fix: %s",
+                attempt + 1,
+                len(report.fixable_errors),
+                "; ".join(issue.message for issue in report.fixable_errors),
+            )
             messages += [
                 {"role": "assistant", "content": json.dumps(data.model_dump(mode="json"), ensure_ascii=False)},
                 {

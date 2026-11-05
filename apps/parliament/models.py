@@ -3,6 +3,7 @@ from django.db import models
 from django.urls import reverse
 
 from .constants import INDEPENDENT_CODES, club_color
+from .portraits import local_url, remote_url
 
 
 class Term(models.Model):
@@ -96,11 +97,11 @@ class MP(models.Model):
 
     @property
     def photo_url(self) -> str:
-        return f"{settings.SEJM_API_URL}/term{self.term_id}/MP/{self.sejm_id}/photo"
+        return local_url(self.term_id, self.sejm_id, "full") or remote_url(self.term_id, self.sejm_id, "full")
 
     @property
     def photo_mini_url(self) -> str:
-        return f"{settings.SEJM_API_URL}/term{self.term_id}/MP/{self.sejm_id}/photo-mini"
+        return local_url(self.term_id, self.sejm_id, "mini") or remote_url(self.term_id, self.sejm_id, "mini")
 
     @property
     def attendance_pct(self) -> float | None:

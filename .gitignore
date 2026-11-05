@@ -1,4 +1,5 @@
 .venv/
+.venv-chandra/
 __pycache__/
 *.pyc
 .env

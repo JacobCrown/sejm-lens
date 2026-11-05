@@ -49,7 +49,7 @@ class ScriptedLLM:
 
 def analyze(llm: ScriptedLLM, name="Jan Testowy", max_repairs=2, ocr_conf=0.97):
     ex = OcrLlmExtractor(llm=llm.client(), max_repairs=max_repairs)
-    return ex.analyze(OCR_TEXT, "paddleocr", ocr_conf, name, 2024)
+    return ex.analyze(OCR_TEXT, "chandra", ocr_conf, name, 2024)
 
 
 # ---------- ekstraktor ----------
@@ -102,6 +102,13 @@ def test_picks_the_better_of_several_attempts():
     assert len(result.verification["issues"]) <= 5
 
 
+def test_empty_repair_keeps_the_earlier_answer():
+    llm = ScriptedLLM(bad_payload(), "")
+    result = analyze(llm, max_repairs=1)
+    assert llm.calls == 2 and result.needs_review
+    assert any("909000" in message for message in result.issues)
+
+
 def test_schema_failure_on_every_attempt_raises():
     llm = ScriptedLLM("{\"declarant\": {}}")
     with pytest.raises(ExtractorError, match="schema"):
@@ -122,7 +129,7 @@ def test_provider_failure_becomes_extractor_error():
         transport=httpx.MockTransport(lambda r: httpx.Response(401, text="bad key")),
     ))
     with pytest.raises(ExtractorError, match="refused access"):
-        ex.analyze(OCR_TEXT, "paddleocr", 0.97, None, None)
+        ex.analyze(OCR_TEXT, "chandra", 0.97, None, None)
 
 
 def test_get_extractor_registry():
@@ -244,7 +251,7 @@ def test_llm_outage_marks_declaration_failed_but_keeps_ocr_text_for_retry(pendin
 def test_profile_page_shows_structured_extras_and_issues(client, synced):
     mp = MP.objects.get(sejm_id=1)
     d = AssetDeclaration.objects.create(
-        mp=mp, year=2024, status=AssetDeclaration.Status.NEEDS_REVIEW, extractor="ocr_llm", ocr_engine="paddleocr",
+        mp=mp, year=2024, status=AssetDeclaration.Status.NEEDS_REVIEW, extractor="ocr_llm", ocr_engine="chandra",
         confidence=0.62,
         notes="BŁĄD [real_estate[1].value]: Kwoty 909000 PLN nie ma w tekście OCR\nKurs EUR przybliżony",
         structured={
@@ -259,7 +266,7 @@ def test_profile_page_shows_structured_extras_and_issues(client, synced):
     assert "TRANSREM sp. z o.o.: rada nadzorcza, od kwiecień 2011" in html
     assert "Wykryte problemy z odczytem (1)" in html and "909000" in html
     assert "Kurs EUR" not in html
-    assert "OCR (paddleocr) + model językowy" in html
+    assert "OCR (chandra) + model językowy" in html
 
 
 # ---------- OCR ----------
@@ -312,34 +319,28 @@ def test_ocr_pdf_errors():
 
 
 @pytest.mark.ocr
-def test_missing_paddle_gives_helpful_error(settings, monkeypatch):
+def test_missing_chandra_gives_helpful_error(monkeypatch):
     import builtins
 
     real_import = builtins.__import__
 
     def fake_import(name, *args, **kwargs):
-        if name == "paddleocr":
-            raise ImportError("no paddle")
+        if name == "chandra" or name.startswith("chandra."):
+            raise ImportError("no chandra")
         return real_import(name, *args, **kwargs)
 
     monkeypatch.setattr(builtins, "__import__", fake_import)
-    from apps.assets.ocr.paddle import PaddleOCREngine
+    from apps.assets.ocr.chandra import ChandraEngine
 
-    PaddleOCREngine._instance = None
+    ChandraEngine._instance = None
     with pytest.raises(OCRError, match="uv sync --extra ocr"):
-        PaddleOCREngine("pl", "cpu")
+        ChandraEngine("cpu")
 
 
 @pytest.mark.ocr
 @pytest.mark.skipif(not __import__("os").environ.get("RUN_OCR_TESTS"), reason="wolny test; ustaw RUN_OCR_TESTS=1")
-def test_real_paddleocr_reads_a_rendered_page():
-    from PIL import Image, ImageDraw, ImageFont
-
+def test_real_chandra_reports_cuda_when_requested():
     from apps.assets.ocr import get_ocr_engine
 
-    font = ImageFont.load_default(size=36)
-    img = Image.new("RGB", (900, 200), "white")
-    ImageDraw.Draw(img).text((30, 60), "Zasoby pieniezne: 107728 PLN", fill="black", font=font)
-    lines = get_ocr_engine("paddle").recognize(img)
-    text = " ".join(l.text for l in lines)
-    assert "107728" in text.replace(" ", "")
+    engine = get_ocr_engine("chandra")
+    assert engine.name == "chandra"

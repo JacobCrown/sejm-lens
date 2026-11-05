@@ -2,6 +2,8 @@ import pytest
 from django.core.management import call_command
 from django.urls import reverse
 
+from apps.parliament.models import MP, Club
+
 pytestmark = pytest.mark.django_db
 
 
@@ -45,6 +47,38 @@ def test_htmx_partials(client, synced):
     resp = client.get(reverse("mp_votes", args=[4]) + "?filter=against", headers=headers)
     body = resp.content.decode()
     assert "wbrew klubowi" in body and "poprawka 1" in body
+
+
+def test_club_members_are_paginated(client, synced):
+    club = Club.objects.get(term=synced, code="KO")
+    MP.objects.bulk_create([
+        MP(term=synced, sejm_id=1000 + i, first_name="Poseł", last_name=f"A{i:02d}", club=club)
+        for i in range(25)
+    ])
+
+    page1 = client.get(reverse("club_detail", args=["KO"]))
+    body = page1.content.decode()
+    assert page1.status_code == 200
+    assert body.count("zgodność z klubem") == 20
+    assert "Członkowie (27)" in body
+    assert "Poseł A00" in body and "Poseł A19" in body
+    assert "Jan Kowalski" not in body
+    assert "Strona 1 z 2" in body
+
+    page2 = client.get(reverse("club_detail", args=["KO"]) + "?page=2")
+    body2 = page2.content.decode()
+    assert body2.count("zgodność z klubem") == 7
+    assert "Jan Kowalski" in body2 and "Anna Nowak" in body2 and "Poseł A20" in body2
+    assert "Poseł A00" not in body2
+    assert "Członkowie (27)" in body2
+    assert "Strona 2 z 2" in body2
+
+    partial = client.get(reverse("club_detail", args=["KO"]) + "?page=2", headers={"HX-Request": "true"})
+    fragment = partial.content.decode()
+    assert partial.status_code == 200
+    assert "<html" not in fragment
+    assert "Jan Kowalski" in fragment
+    assert "Klub Parlamentarny" not in fragment
 
 
 def test_404(client, synced):
